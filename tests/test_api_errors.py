@@ -31,5 +31,3 @@ def test_request_id_header_propagated(sample_text, mock_ollama_response):
         resp = client.post("/api/v1/summarize/", json={"text": sample_text})
         assert resp.status_code == 200
         assert resp.headers.get("X-Request-ID")
-
-

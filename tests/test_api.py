@@ -35,5 +35,3 @@ def test_summarize_endpoint_validation_error():
         json={"text": ""}
     )
     assert resp.status_code == 422
-
-
