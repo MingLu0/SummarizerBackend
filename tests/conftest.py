@@ -5,7 +5,7 @@ import pytest
 import asyncio
 from typing import AsyncGenerator, Generator
 from httpx import AsyncClient
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 
 from app.main import app
 

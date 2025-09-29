@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.logging import setup_logging, get_logger
 from app.api.v1.routes import api_router
+from app.core.middleware import request_context_middleware
+from app.core.errors import init_exception_handlers
 
 # Set up logging
 setup_logging()
@@ -29,6 +31,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add request context middleware
+app.middleware("http")(request_context_middleware)
+
+# Initialize exception handlers
+init_exception_handlers(app)
 
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")

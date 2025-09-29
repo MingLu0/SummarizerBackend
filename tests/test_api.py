@@ -3,7 +3,7 @@ Integration tests for API endpoints.
 """
 import pytest
 from unittest.mock import patch
-from fastapi.testclient import TestClient
+from starlette.testclient import TestClient
 from app.main import app
 
 from tests.test_services import StubAsyncClient, StubAsyncResponse

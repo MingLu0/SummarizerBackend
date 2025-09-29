@@ -2,6 +2,7 @@
 Summarization endpoints.
 """
 from fastapi import APIRouter, HTTPException
+import httpx
 from app.api.v1.schemas import SummarizeRequest, SummarizeResponse
 from app.services.summarizer import ollama_service
 
@@ -18,7 +19,8 @@ async def summarize(payload: SummarizeRequest) -> SummarizeResponse:
             prompt=payload.prompt or "Summarize the following text concisely:",
         )
         return SummarizeResponse(**result)
-    except Exception as e:
+    except httpx.HTTPError as e:
+        # Upstream (Ollama) error
         raise HTTPException(status_code=502, detail=f"Summarization failed: {str(e)}")
 
 
