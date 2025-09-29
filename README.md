@@ -202,11 +202,14 @@ client.newCall(request).execute().use { response ->
 ### Running Tests
 
 ```bash
-# Run all tests
+# Run all tests locally
 pytest
 
 # Run with coverage
 pytest --cov=app --cov-report=html --cov-report=term
+
+# Run tests in Docker
+./scripts/run-tests.sh
 
 # Run specific test file
 pytest tests/test_api.py -v
@@ -255,15 +258,46 @@ tests/
 
 ## Docker Deployment
 
-### Local Development with Docker
+### Quick Start with Docker
 
 ```bash
-# Build and run with docker-compose
-docker-compose up --build
+# 1. Start Ollama service
+docker-compose up ollama -d
 
-# Or build manually
+# 2. Download a model (first time only)
+./scripts/setup-ollama.sh llama3.1:8b
+
+# 3. Start the API
+docker-compose up api -d
+
+# 4. Test the setup
+curl http://localhost:8000/health
+```
+
+### Development with Hot Reload
+
+```bash
+# Use development compose file
+docker-compose -f docker-compose.dev.yml up --build
+```
+
+### Production with Nginx
+
+```bash
+# Start with Nginx reverse proxy
+docker-compose --profile production up --build
+```
+
+### Manual Build
+
+```bash
+# Build the image
 docker build -t summarizer-backend .
-docker run -p 8000:8000 summarizer-backend
+
+# Run with Ollama
+docker run -p 8000:8000 \
+  -e OLLAMA_HOST=http://host.docker.internal:11434 \
+  summarizer-backend
 ```
 
 ### Production Deployment
