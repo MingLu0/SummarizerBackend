@@ -419,7 +419,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- 📧 **Email**: [your-email@example.com]
+- 📧 **Email**: purringlab@gmail.com
 - 🐛 **Issues**: [GitHub Issues](https://github.com/MingLu0/SummarizerBackend/issues)
 - 📖 **Documentation**: [API Docs](http://127.0.0.1:8000/docs)
 
