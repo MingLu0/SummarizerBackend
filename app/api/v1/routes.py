@@ -3,11 +3,10 @@ API v1 routes for the text summarizer backend.
 """
 from fastapi import APIRouter
 
+from .summarize import router as summarize_router
+
 # Create API router
 api_router = APIRouter()
 
-# Import and include route modules here
-# from .endpoints import summarize, health
-
-# api_router.include_router(summarize.router, prefix="/summarize", tags=["summarize"])
-# api_router.include_router(health.router, prefix="/health", tags=["health"])
+# Include v1 routers
+api_router.include_router(summarize_router, prefix="/summarize", tags=["summarize"])
