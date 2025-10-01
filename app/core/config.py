@@ -3,7 +3,8 @@ Configuration management for the text summarizer backend.
 """
 import os
 from typing import Optional
-from pydantic import BaseSettings, Field, validator
+from pydantic import Field, validator
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
