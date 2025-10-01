@@ -318,29 +318,41 @@ docker run -p 8000:8000 \
 
 ## Cloud Deployment Options
 
-### Railway
+### 🚀 **Quick Deploy with Railway (Recommended)**
+
 ```bash
-# Install Railway CLI
+# 1. Install Railway CLI
 npm install -g @railway/cli
 
-# Deploy
+# 2. Login and deploy
 railway login
 railway init
 railway up
 ```
 
-### Render
-1. Connect your GitHub repository
-2. Set environment variables
-3. Deploy automatically on push
+**Railway Advantages:**
+- ✅ Supports Docker Compose with Ollama
+- ✅ Persistent volumes for models
+- ✅ Automatic HTTPS
+- ✅ Easy environment management
 
-### AWS ECS
-```bash
-# Build and push to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin your-account.dkr.ecr.us-east-1.amazonaws.com
-docker tag summarizer-backend:latest your-account.dkr.ecr.us-east-1.amazonaws.com/summarizer-backend:latest
-docker push your-account.dkr.ecr.us-east-1.amazonaws.com/summarizer-backend:latest
-```
+### 📋 **Other Options**
+
+- **Google Cloud Run**: Serverless with auto-scaling
+- **AWS ECS**: Full container orchestration
+- **DigitalOcean App Platform**: Simple deployment
+- **Render**: GitHub integration
+
+### 📖 **Detailed Deployment Guide**
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for comprehensive deployment instructions for all platforms.
+
+### ⚠️ **Important Notes**
+
+- **Memory Requirements**: llama3.1:8b needs ~8GB RAM
+- **Model Download**: Models are downloaded after deployment
+- **Cost Optimization**: Start with smaller models (mistral:7b)
+- **Security**: Enable API keys for production use
 
 ## Monitoring and Logging
 
