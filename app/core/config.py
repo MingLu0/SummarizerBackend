@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
     # Ollama Configuration
-    ollama_model: str = Field(default="llama3.1:8b", env="OLLAMA_MODEL")
+    ollama_model: str = Field(default="llama3.2:latest", env="OLLAMA_MODEL")
     ollama_host: str = Field(default="http://127.0.0.1:11434", env="OLLAMA_HOST")
     ollama_timeout: int = Field(default=30, env="OLLAMA_TIMEOUT", ge=1)
     
