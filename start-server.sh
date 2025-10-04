@@ -55,8 +55,18 @@ fi
 PORT=$(grep SERVER_PORT .env | cut -d'=' -f2)
 if lsof -i :$PORT > /dev/null 2>&1; then
     echo "🔄 Stopping existing server on port $PORT..."
+    # Try multiple methods to kill the process
+    pkill -f "uvicorn.*app.main:app" || true
     pkill -f "uvicorn.*$PORT" || true
-    sleep 2
+    # Force kill any process using the port
+    lsof -ti :$PORT | xargs kill -9 2>/dev/null || true
+    sleep 3
+    # Verify port is free
+    if lsof -i :$PORT > /dev/null 2>&1; then
+        echo "⚠️  Warning: Could not free port $PORT, trying to continue anyway..."
+    else
+        echo "✅ Port $PORT is now free"
+    fi
 fi
 
 # Start the server
