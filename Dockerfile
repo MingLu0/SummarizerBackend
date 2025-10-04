@@ -21,8 +21,8 @@ RUN apt-get update \
 # Install Ollama
 RUN curl -fsSL https://ollama.ai/install.sh | sh
 
-# Create Ollama directory with proper permissions
-RUN mkdir -p /root/.ollama && chmod 755 /root/.ollama
+# Create a writable directory for Ollama in /app
+RUN mkdir -p /app/.ollama && chmod 755 /app/.ollama
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -40,11 +40,12 @@ RUN echo '#!/bin/bash\n\
 # Set Ollama environment variables\n\
 export OLLAMA_HOST=0.0.0.0:11434\n\
 export OLLAMA_ORIGINS=*\n\
-export OLLAMA_MODELS=/root/.ollama/models\n\
+export OLLAMA_MODELS=/app/.ollama/models\n\
+export HOME=/app\n\
 \n\
 # Ensure Ollama directory exists with proper permissions\n\
-mkdir -p /root/.ollama\n\
-chmod 755 /root/.ollama\n\
+mkdir -p /app/.ollama\n\
+chmod 755 /app/.ollama\n\
 \n\
 # Start Ollama in background\n\
 echo "Starting Ollama server..."\n\
@@ -74,8 +75,12 @@ echo "Starting FastAPI app..."\n\
 exec uvicorn app.main:app --host 0.0.0.0 --port 7860' > /app/start.sh \
     && chmod +x /app/start.sh
 
-# Run as root to avoid permission issues with Ollama
-# USER appuser
+# Create non-root user and give proper permissions
+RUN groupadd -r appuser && useradd -r -g appuser appuser \
+    && chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
 
 # Expose port (Hugging Face Spaces uses port 7860)
 EXPOSE 7860
