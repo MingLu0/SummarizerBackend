@@ -70,8 +70,8 @@ echo "Cleaning up existing models..."\n\
 ollama list | grep -v "NAME" | awk '{print $1}' | xargs -r ollama rm\n\
 \n\
 # Pull the model (this will take a few minutes on first run)\n\
-echo "Pulling model llama3.2:1b-instruct..."\n\
-ollama pull llama3.2:1b-instruct\n\
+echo "Pulling model llama3.2:1b..."\n\
+ollama pull llama3.2:1b\n\
 \n\
 # Start the FastAPI app\n\
 echo "Starting FastAPI app..."\n\
