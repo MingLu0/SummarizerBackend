@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     
     # Ollama Configuration
     ollama_model: str = Field(default="mistral:7b", env="OLLAMA_MODEL")
-    ollama_host: str = Field(default="http://localhost:11434", env="OLLAMA_HOST")
+    ollama_host: str = Field(default="http://0.0.0.0:11434", env="OLLAMA_HOST")
     ollama_timeout: int = Field(default=60, env="OLLAMA_TIMEOUT", ge=1)
     
     # Server Configuration
