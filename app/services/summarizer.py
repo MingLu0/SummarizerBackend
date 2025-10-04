@@ -65,9 +65,14 @@ class OllamaService:
         }
         
         try:
+            # Debug logging
+            full_url = f"{self.base_url}/api/generate"
+            logger.info(f"Making request to: {full_url}")
+            logger.info(f"Base URL: {self.base_url}")
+            
             async with httpx.AsyncClient(timeout=dynamic_timeout) as client:
                 response = await client.post(
-                    f"{self.base_url}/api/generate",
+                    full_url,
                     json=payload
                 )
                 response.raise_for_status()
