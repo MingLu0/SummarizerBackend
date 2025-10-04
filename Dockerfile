@@ -21,6 +21,9 @@ RUN apt-get update \
 # Install Ollama
 RUN curl -fsSL https://ollama.ai/install.sh | sh
 
+# Create Ollama directory with proper permissions
+RUN mkdir -p /root/.ollama && chmod 755 /root/.ollama
+
 # Copy requirements first for better caching
 COPY requirements.txt .
 
@@ -32,30 +35,31 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY app/ ./app/
 COPY pytest.ini .
 
-# Create non-root user for security
-RUN groupadd -r appuser && useradd -r -g appuser appuser \
-    && chown -R appuser:appuser /app
-
 # Create startup script
 RUN echo '#!/bin/bash\n\
+# Set Ollama environment\n\
+export OLLAMA_HOST=0.0.0.0:11434\n\
+export OLLAMA_ORIGINS=*\n\
+\n\
 # Start Ollama in background\n\
+echo "Starting Ollama server..."\n\
 ollama serve &\n\
 \n\
 # Wait for Ollama to be ready\n\
 echo "Waiting for Ollama to start..."\n\
-sleep 10\n\
+sleep 15\n\
 \n\
 # Pull the model (this will take a few minutes on first run)\n\
-echo "Pulling model..."\n\
+echo "Pulling model mistral:7b..."\n\
 ollama pull mistral:7b\n\
 \n\
 # Start the FastAPI app\n\
 echo "Starting FastAPI app..."\n\
 exec uvicorn app.main:app --host 0.0.0.0 --port 7860' > /app/start.sh \
-    && chmod +x /app/start.sh \
-    && chown appuser:appuser /app/start.sh
+    && chmod +x /app/start.sh
 
-USER appuser
+# Run as root to avoid permission issues with Ollama
+# USER appuser
 
 # Expose port (Hugging Face Spaces uses port 7860)
 EXPOSE 7860
