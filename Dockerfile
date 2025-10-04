@@ -40,11 +40,11 @@ RUN echo '#!/bin/bash\n\
 # Set Ollama environment variables\n\
 export OLLAMA_HOST=0.0.0.0:11434\n\
 export OLLAMA_ORIGINS=*\n\
-export OLLAMA_MODELS=/app/.ollama/models\n\
-export HOME=/app\n\
+export OLLAMA_MODELS=/tmp/ollama/models\n\
+export HOME=/tmp\n\
 \n\
-# Ensure Ollama directory exists (permissions already set during build)\n\
-mkdir -p /app/.ollama\n\
+# Use /tmp directory which is always writable\n\
+mkdir -p /tmp/ollama\n\
 \n\
 # Start Ollama in background\n\
 echo "Starting Ollama server..."\n\
