@@ -89,3 +89,15 @@ async def health_check():
         "service": "text-summarizer-api",
         "version": "1.0.0"
     }
+
+
+@app.get("/debug/config")
+async def debug_config():
+    """Debug endpoint to show current configuration."""
+    return {
+        "ollama_host": settings.ollama_host,
+        "ollama_model": settings.ollama_model,
+        "ollama_timeout": settings.ollama_timeout,
+        "server_host": settings.server_host,
+        "server_port": settings.server_port
+    }
