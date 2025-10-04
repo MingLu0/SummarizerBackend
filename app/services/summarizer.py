@@ -86,7 +86,8 @@ class OllamaService:
                 
         except httpx.TimeoutException:
             logger.error(f"Timeout calling Ollama API after {dynamic_timeout}s for text of {text_length} characters")
-            raise httpx.HTTPError(f"Ollama API timeout after {dynamic_timeout}s. Text may be too long or complex.")
+            # Re-raise the TimeoutException so the API layer can handle it properly
+            raise
         except httpx.HTTPError as e:
             logger.error(f"HTTP error calling Ollama API: {e}")
             raise
