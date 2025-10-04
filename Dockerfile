@@ -66,8 +66,8 @@ for i in {1..10}; do\n\
 done\n\
 \n\
 # Pull the model (this will take a few minutes on first run)\n\
-echo "Pulling model mistral:7b-instruct..."\n\
-ollama pull mistral:7b-instruct\n\
+echo "Pulling model llama3.2:3b-instruct..."\n\
+ollama pull llama3.2:3b-instruct\n\
 \n\
 # Start the FastAPI app\n\
 echo "Starting FastAPI app..."\n\
