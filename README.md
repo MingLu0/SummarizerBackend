@@ -50,9 +50,42 @@ A FastAPI-based backend service for text summarization using Ollama's local lang
    pip install -r requirements.txt
    ```
 
-4. **Run the API**
+4. **Start the server (Recommended)**
    ```bash
-   uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+   # Use the automated startup script (checks everything for you)
+   ./start-server.sh
+   ```
+   
+   **OR manually:**
+   ```bash
+   # Start the server manually
+   uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+   ```
+
+## Configuration
+
+The server uses environment variables for configuration. A `.env` file is automatically created with sensible defaults:
+
+```bash
+# Ollama Configuration
+OLLAMA_HOST=http://127.0.0.1:11434
+OLLAMA_MODEL=llama3.2:latest
+OLLAMA_TIMEOUT=30
+
+# Server Configuration  
+SERVER_HOST=0.0.0.0
+SERVER_PORT=8000
+LOG_LEVEL=INFO
+```
+
+**Common Issues & Solutions:**
+
+- **Port already in use**: The startup script automatically handles this
+- **Ollama connection failed**: Ensure Ollama is running (`ollama serve`)
+- **Model not found**: Install the model (`ollama pull llama3.2:latest`)
+- **Wrong host configuration**: The `.env` file ensures correct localhost settings
+
+## API Usage
    ```
 
 5. **Test the API**

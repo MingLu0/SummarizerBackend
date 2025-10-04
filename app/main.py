@@ -9,6 +9,7 @@ from app.core.logging import setup_logging, get_logger
 from app.api.v1.routes import api_router
 from app.core.middleware import request_context_middleware
 from app.core.errors import init_exception_handlers
+from app.services.summarizer import ollama_service
 
 # Set up logging
 setup_logging()
@@ -48,6 +49,20 @@ async def startup_event():
     logger.info("Starting Text Summarizer API")
     logger.info(f"Ollama host: {settings.ollama_host}")
     logger.info(f"Ollama model: {settings.ollama_model}")
+    
+    # Validate Ollama connectivity
+    try:
+        is_healthy = await ollama_service.check_health()
+        if is_healthy:
+            logger.info("✅ Ollama service is accessible and healthy")
+        else:
+            logger.warning("⚠️  Ollama service is not responding properly")
+            logger.warning(f"   Please ensure Ollama is running at {settings.ollama_host}")
+            logger.warning(f"   And that model '{settings.ollama_model}' is available")
+    except Exception as e:
+        logger.error(f"❌ Failed to connect to Ollama: {e}")
+        logger.error(f"   Please check that Ollama is running at {settings.ollama_host}")
+        logger.error(f"   And that model '{settings.ollama_model}' is installed")
 
 
 @app.on_event("shutdown")
