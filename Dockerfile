@@ -79,8 +79,8 @@ RUN groupadd -r appuser && useradd -r -g appuser appuser \
     && chown -R appuser:appuser /app \
     && chmod -R 755 /app/.ollama
 
-# Switch to non-root user
-USER appuser
+# For Hugging Face Spaces, we need to run as root due to permission restrictions
+# USER appuser
 
 # Expose port (Hugging Face Spaces uses port 7860)
 EXPOSE 7860
