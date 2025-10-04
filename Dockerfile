@@ -37,9 +37,14 @@ COPY pytest.ini .
 
 # Create startup script
 RUN echo '#!/bin/bash\n\
-# Set Ollama environment\n\
+# Set Ollama environment variables\n\
 export OLLAMA_HOST=0.0.0.0:11434\n\
 export OLLAMA_ORIGINS=*\n\
+export OLLAMA_MODELS=/root/.ollama/models\n\
+\n\
+# Ensure Ollama directory exists with proper permissions\n\
+mkdir -p /root/.ollama\n\
+chmod 755 /root/.ollama\n\
 \n\
 # Start Ollama in background\n\
 echo "Starting Ollama server..."\n\
@@ -47,7 +52,18 @@ ollama serve &\n\
 \n\
 # Wait for Ollama to be ready\n\
 echo "Waiting for Ollama to start..."\n\
-sleep 15\n\
+sleep 20\n\
+\n\
+# Check if Ollama is running\n\
+for i in {1..10}; do\n\
+  if curl -s http://localhost:11434/api/tags > /dev/null; then\n\
+    echo "Ollama is ready!"\n\
+    break\n\
+  else\n\
+    echo "Waiting for Ollama... attempt $i"\n\
+    sleep 5\n\
+  fi\n\
+done\n\
 \n\
 # Pull the model (this will take a few minutes on first run)\n\
 echo "Pulling model mistral:7b..."\n\
