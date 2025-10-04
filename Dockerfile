@@ -22,7 +22,7 @@ RUN apt-get update \
 RUN curl -fsSL https://ollama.ai/install.sh | sh
 
 # Create a writable directory for Ollama in /app
-RUN mkdir -p /app/.ollama && chmod 755 /app/.ollama
+RUN mkdir -p /app/.ollama
 
 # Copy requirements first for better caching
 COPY requirements.txt .
@@ -76,7 +76,8 @@ exec uvicorn app.main:app --host 0.0.0.0 --port 7860' > /app/start.sh \
 
 # Create non-root user and give proper permissions
 RUN groupadd -r appuser && useradd -r -g appuser appuser \
-    && chown -R appuser:appuser /app
+    && chown -R appuser:appuser /app \
+    && chmod -R 755 /app/.ollama
 
 # Switch to non-root user
 USER appuser
