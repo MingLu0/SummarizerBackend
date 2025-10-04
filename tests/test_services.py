@@ -60,8 +60,8 @@ class TestOllamaService:
     def test_service_initialization(self, ollama_service):
         """Test service initialization."""
         assert ollama_service.base_url == "http://127.0.0.1:11434"
-        assert ollama_service.model == "llama3.1:8b"
-        assert ollama_service.timeout == 30
+        assert ollama_service.model == "llama3.2:latest"  # Updated to match current config
+        assert ollama_service.timeout == 120  # Updated to match current config
     
     @pytest.mark.asyncio
     async def test_summarize_text_success(self, ollama_service, mock_ollama_response):
@@ -71,7 +71,7 @@ class TestOllamaService:
             result = await ollama_service.summarize_text("Test text")
             
             assert result["summary"] == mock_ollama_response["response"]
-            assert result["model"] == "llama3.1:8b"
+            assert result["model"] == "llama3.2:latest"  # Updated to match current config
             assert result["tokens_used"] == mock_ollama_response["eval_count"]
             assert "latency_ms" in result
     
@@ -130,3 +130,97 @@ class TestOllamaService:
         with patch('httpx.AsyncClient', return_value=StubAsyncClient(get_exc=httpx.HTTPError("Connection failed"))):
             result = await ollama_service.check_health()
             assert result is False
+
+    # Tests for Dynamic Timeout System
+    @pytest.mark.asyncio
+    async def test_dynamic_timeout_small_text(self, ollama_service, mock_ollama_response):
+        """Test dynamic timeout calculation for small text (should use base timeout)."""
+        stub_response = StubAsyncResponse(json_data=mock_ollama_response)
+        captured_timeout = None
+
+        class TimeoutCaptureClient(StubAsyncClient):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+                self.timeout = None
+
+            async def __aenter__(self):
+                return self
+
+            async def post(self, *args, **kwargs):
+                return await super().post(*args, **kwargs)
+
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value = TimeoutCaptureClient(post_result=stub_response)
+            mock_client.return_value.timeout = 120  # Base timeout
+            
+            result = await ollama_service.summarize_text("Short text")
+            
+            # Verify the client was called with the base timeout
+            mock_client.assert_called_once()
+            call_args = mock_client.call_args
+            assert call_args[1]['timeout'] == 120
+
+    @pytest.mark.asyncio
+    async def test_dynamic_timeout_large_text(self, ollama_service, mock_ollama_response):
+        """Test dynamic timeout calculation for large text (should extend timeout)."""
+        stub_response = StubAsyncResponse(json_data=mock_ollama_response)
+        large_text = "A" * 5000  # 5000 characters
+        
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value = StubAsyncClient(post_result=stub_response)
+            
+            result = await ollama_service.summarize_text(large_text)
+            
+            # Verify the client was called with extended timeout
+            # Expected: 30s base + (5000-1000)/1000 * 10 = 30 + 40 = 70s
+            mock_client.assert_called_once()
+            call_args = mock_client.call_args
+            expected_timeout = 120 + (5000 - 1000) // 1000 * 10  # 160 seconds
+            assert call_args[1]['timeout'] == expected_timeout
+
+    @pytest.mark.asyncio
+    async def test_dynamic_timeout_maximum_cap(self, ollama_service, mock_ollama_response):
+        """Test that dynamic timeout is capped at 5 minutes (300 seconds)."""
+        stub_response = StubAsyncResponse(json_data=mock_ollama_response)
+        very_large_text = "A" * 50000  # 50000 characters (should exceed 300s cap)
+        
+        with patch('httpx.AsyncClient') as mock_client:
+            mock_client.return_value = StubAsyncClient(post_result=stub_response)
+            
+            result = await ollama_service.summarize_text(very_large_text)
+            
+            # Verify the timeout is capped at 300 seconds
+            mock_client.assert_called_once()
+            call_args = mock_client.call_args
+            assert call_args[1]['timeout'] == 300  # Maximum cap
+
+    @pytest.mark.asyncio
+    async def test_dynamic_timeout_logging(self, ollama_service, mock_ollama_response, caplog):
+        """Test that dynamic timeout calculation is logged correctly."""
+        stub_response = StubAsyncResponse(json_data=mock_ollama_response)
+        test_text = "A" * 2500  # 2500 characters
+        
+        with patch('httpx.AsyncClient', return_value=StubAsyncClient(post_result=stub_response)):
+            await ollama_service.summarize_text(test_text)
+            
+            # Check that the logging message contains the correct information
+            log_messages = [record.message for record in caplog.records]
+            timeout_log = next((msg for msg in log_messages if "Processing text of" in msg), None)
+            assert timeout_log is not None
+            assert "2500 characters" in timeout_log
+            assert "timeout of" in timeout_log
+
+    @pytest.mark.asyncio
+    async def test_timeout_error_message_improvement(self, ollama_service):
+        """Test that timeout errors now include dynamic timeout and text length info."""
+        test_text = "A" * 2000  # 2000 characters
+        expected_timeout = 120 + (2000 - 1000) // 1000 * 10  # 130 seconds
+        
+        with patch('httpx.AsyncClient', return_value=StubAsyncClient(post_exc=httpx.TimeoutException("Timeout"))):
+            with pytest.raises(httpx.HTTPError) as exc_info:
+                await ollama_service.summarize_text(test_text)
+            
+            # Verify the error message includes the dynamic timeout and text length
+            error_message = str(exc_info.value)
+            assert f"timeout after {expected_timeout}s" in error_message
+            assert "Text may be too long or complex" in error_message
