@@ -65,9 +65,13 @@ for i in {1..10}; do\n\
   fi\n\
 done\n\
 \n\
+# Clean up any existing models to free space\n\
+echo "Cleaning up existing models..."\n\
+ollama list | grep -v "NAME" | awk '{print $1}' | xargs -r ollama rm\n\
+\n\
 # Pull the model (this will take a few minutes on first run)\n\
-echo "Pulling model llama3.2:3b-instruct..."\n\
-ollama pull llama3.2:3b-instruct\n\
+echo "Pulling model llama3.2:1b-instruct..."\n\
+ollama pull llama3.2:1b-instruct\n\
 \n\
 # Start the FastAPI app\n\
 echo "Starting FastAPI app..."\n\
