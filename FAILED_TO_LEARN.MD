@@ -56,6 +56,24 @@ ERROR: HTTP error calling Ollama API: Client error '404 Not Found' for url 'http
 - Summarization requests failed
 - No clear indication of what model was needed
 
+### 4. **Timeout Issues with Large Text Processing**
+**Problem:** 502 Bad Gateway errors when processing large text inputs
+
+**Error Messages:**
+```
+{"detail":"Summarization failed: Ollama API timeout"}
+```
+
+**Root Cause:**
+- Fixed 30-second timeout was insufficient for large text processing
+- No dynamic timeout adjustment based on input size
+- Poor error handling for timeout scenarios
+
+**Impact:**
+- Large text summarization requests failed with 502 errors
+- Poor user experience with unclear error messages
+- No guidance on how to resolve the issue
+
 ---
 
 ## 🛠️ The Solutions We Implemented
@@ -126,7 +144,42 @@ async def startup_event():
 - ✅ Prevents silent failures
 - ✅ Better debugging experience
 
-### 4. **Comprehensive Documentation**
+### 4. **Dynamic Timeout Management**
+
+**Solution:** Implemented intelligent timeout adjustment based on text size
+
+```python
+# Calculate dynamic timeout based on text length
+text_length = len(text)
+dynamic_timeout = self.timeout + max(0, (text_length - 1000) // 1000 * 10)  # +10s per 1000 chars over 1000
+dynamic_timeout = min(dynamic_timeout, 300)  # Cap at 5 minutes
+```
+
+**Benefits:**
+- ✅ Automatically scales timeout based on input size
+- ✅ Prevents timeouts for large text processing
+- ✅ Caps maximum timeout to prevent infinite waits
+- ✅ Better logging with processing time and text length
+
+### 5. **Improved Error Handling**
+
+**Solution:** Enhanced error handling with specific HTTP status codes and helpful messages
+
+```python
+except httpx.TimeoutException as e:
+    raise HTTPException(
+        status_code=504, 
+        detail="Request timeout. The text may be too long or complex. Try reducing the text length or max_tokens."
+    )
+```
+
+**Benefits:**
+- ✅ 504 Gateway Timeout for timeout errors (instead of 502)
+- ✅ Clear, actionable error messages
+- ✅ Specific guidance on how to resolve issues
+- ✅ Better debugging experience
+
+### 6. **Comprehensive Documentation**
 
 **Solution:** Updated README with troubleshooting section
 
@@ -170,6 +223,12 @@ async def startup_event():
 - **Use service names for containerized environments**
 - **Validate model availability matches configuration**
 
+### 6. **Dynamic Resource Management is Critical**
+- **Don't use fixed timeouts for variable workloads**
+- **Scale resources based on input complexity**
+- **Provide reasonable upper bounds to prevent resource exhaustion**
+- **Log processing metrics for optimization insights**
+
 ---
 
 ## 🔮 Prevention Strategies
@@ -183,6 +242,7 @@ async def startup_event():
 - Add schema validation for environment variables
 - Validate model availability on startup
 - Check port availability before binding
+- Test timeout configurations with various input sizes
 
 ### 3. **Better Error Handling**
 - Provide specific error messages for common issues
@@ -238,6 +298,16 @@ logger.error(f"Connection failed: {e}")  # Vague
 # Manual steps: kill processes, check Ollama, start server
 ```
 
+### 5. **Use Dynamic Resource Allocation**
+```python
+# Good
+dynamic_timeout = base_timeout + (text_length - 1000) // 1000 * 10
+dynamic_timeout = min(dynamic_timeout, max_timeout)
+
+# Bad
+timeout = 30  # Fixed timeout for all inputs
+```
+
 ---
 
 ## 🏆 Success Metrics
@@ -249,6 +319,9 @@ After implementing these solutions:
 - ✅ **Automated setup reduces manual steps by 90%**
 - ✅ **Cross-platform support (macOS, Linux, Windows)**
 - ✅ **Comprehensive documentation with troubleshooting**
+- ✅ **Dynamic timeout management prevents 502 errors**
+- ✅ **Large text processing works reliably**
+- ✅ **Better error handling with specific HTTP status codes**
 
 ---
 
@@ -259,6 +332,9 @@ After implementing these solutions:
 3. **Add metrics and monitoring**
 4. **Create Docker development environment**
 5. **Add automated testing for configuration scenarios**
+6. **Implement request queuing for high-load scenarios**
+7. **Add text preprocessing to optimize processing time**
+8. **Create performance benchmarks for different text sizes**
 
 ---
 

@@ -40,6 +40,16 @@ class OllamaService:
         """
         start_time = time.time()
         
+        # Calculate dynamic timeout based on text length
+        # Base timeout + additional time for longer texts
+        text_length = len(text)
+        dynamic_timeout = self.timeout + max(0, (text_length - 1000) // 1000 * 10)  # +10s per 1000 chars over 1000
+        
+        # Cap the timeout at 5 minutes to prevent extremely long waits
+        dynamic_timeout = min(dynamic_timeout, 300)
+        
+        logger.info(f"Processing text of {text_length} characters with timeout of {dynamic_timeout}s")
+        
         # Prepare the full prompt
         full_prompt = f"{prompt}\n\n{text}"
         
@@ -55,7 +65,7 @@ class OllamaService:
         }
         
         try:
-            async with httpx.AsyncClient(timeout=self.timeout) as client:
+            async with httpx.AsyncClient(timeout=dynamic_timeout) as client:
                 response = await client.post(
                     f"{self.base_url}/api/generate",
                     json=payload
@@ -75,8 +85,8 @@ class OllamaService:
                 }
                 
         except httpx.TimeoutException:
-            logger.error(f"Timeout calling Ollama API after {self.timeout}s")
-            raise httpx.HTTPError("Ollama API timeout")
+            logger.error(f"Timeout calling Ollama API after {dynamic_timeout}s for text of {text_length} characters")
+            raise httpx.HTTPError(f"Ollama API timeout after {dynamic_timeout}s. Text may be too long or complex.")
         except httpx.HTTPError as e:
             logger.error(f"HTTP error calling Ollama API: {e}")
             raise
