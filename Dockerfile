@@ -43,9 +43,8 @@ export OLLAMA_ORIGINS=*\n\
 export OLLAMA_MODELS=/app/.ollama/models\n\
 export HOME=/app\n\
 \n\
-# Ensure Ollama directory exists with proper permissions\n\
+# Ensure Ollama directory exists (permissions already set during build)\n\
 mkdir -p /app/.ollama\n\
-chmod 755 /app/.ollama\n\
 \n\
 # Start Ollama in background\n\
 echo "Starting Ollama server..."\n\
