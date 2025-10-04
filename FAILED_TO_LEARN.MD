@@ -74,6 +74,26 @@ ERROR: HTTP error calling Ollama API: Client error '404 Not Found' for url 'http
 - Poor user experience with unclear error messages
 - No guidance on how to resolve the issue
 
+### 5. **Excessive Timeout Values**
+**Problem:** 100+ second timeouts causing poor user experience
+
+**Error Messages:**
+```
+2025-10-04 20:24:04,173 - app.core.middleware - INFO - Response 9e35a92e-2114-4b14-a855-dba08ef7b263: 504 (100036.68ms)
+```
+
+**Root Cause:**
+- Base timeout of 120 seconds was too high
+- Scaling factor of +10 seconds per 1000 characters was excessive
+- Maximum cap of 300 seconds (5 minutes) was unreasonable
+- Dynamic timeout calculation created extremely long waits
+
+**Impact:**
+- Users waited 100+ seconds for timeout errors
+- Poor user experience with extremely long response times
+- Resource waste on stuck requests
+- Unreasonable timeout values for typical use cases
+
 ---
 
 ## 🛠️ The Solutions We Implemented
@@ -161,7 +181,30 @@ dynamic_timeout = min(dynamic_timeout, 300)  # Cap at 5 minutes
 - ✅ Caps maximum timeout to prevent infinite waits
 - ✅ Better logging with processing time and text length
 
-### 5. **Improved Error Handling**
+### 5. **Timeout Value Optimization**
+
+**Solution:** Optimized timeout configuration for better performance and user experience
+
+```python
+# Optimized timeout calculation
+text_length = len(text)
+dynamic_timeout = self.timeout + max(0, (text_length - 1000) // 1000 * 5)  # +5s per 1000 chars over 1000
+dynamic_timeout = min(dynamic_timeout, 120)  # Cap at 2 minutes
+```
+
+**Configuration Changes:**
+- **Base timeout**: 120s → 60s (50% reduction)
+- **Scaling factor**: +10s → +5s per 1000 chars (50% reduction)
+- **Maximum cap**: 300s → 120s (60% reduction)
+
+**Benefits:**
+- ✅ Faster failure detection for stuck requests
+- ✅ More reasonable timeout values for typical use cases
+- ✅ Still provides dynamic scaling for large text
+- ✅ Prevents extremely long waits (100+ seconds)
+- ✅ Better resource utilization
+
+### 6. **Improved Error Handling**
 
 **Solution:** Enhanced error handling with specific HTTP status codes and helpful messages
 
@@ -179,7 +222,7 @@ except httpx.TimeoutException as e:
 - ✅ Specific guidance on how to resolve issues
 - ✅ Better debugging experience
 
-### 6. **Comprehensive Documentation**
+### 7. **Comprehensive Documentation**
 
 **Solution:** Updated README with troubleshooting section
 
@@ -228,6 +271,13 @@ except httpx.TimeoutException as e:
 - **Scale resources based on input complexity**
 - **Provide reasonable upper bounds to prevent resource exhaustion**
 - **Log processing metrics for optimization insights**
+
+### 7. **Timeout Values Must Be Balanced**
+- **Base timeouts should be reasonable for typical use cases**
+- **Scaling factors should be proportional to actual processing needs**
+- **Maximum caps should prevent resource waste without being too restrictive**
+- **Monitor actual processing times to optimize timeout values**
+- **Balance between preventing timeouts and avoiding excessive waits**
 
 ---
 
@@ -301,11 +351,24 @@ logger.error(f"Connection failed: {e}")  # Vague
 ### 5. **Use Dynamic Resource Allocation**
 ```python
 # Good
-dynamic_timeout = base_timeout + (text_length - 1000) // 1000 * 10
-dynamic_timeout = min(dynamic_timeout, max_timeout)
+dynamic_timeout = base_timeout + (text_length - 1000) // 1000 * 5
+dynamic_timeout = min(dynamic_timeout, 120)  # Reasonable cap
 
 # Bad
 timeout = 30  # Fixed timeout for all inputs
+```
+
+### 6. **Optimize Timeout Values Based on Real Usage**
+```python
+# Good - Optimized values
+base_timeout = 60  # Reasonable for typical requests
+scaling_factor = 5  # Proportional to actual processing needs
+max_timeout = 120  # Prevents excessive waits
+
+# Bad - Excessive values
+base_timeout = 120  # Too high for typical requests
+scaling_factor = 10  # Excessive scaling
+max_timeout = 300  # Unreasonable wait times
 ```
 
 ---
@@ -322,6 +385,10 @@ After implementing these solutions:
 - ✅ **Dynamic timeout management prevents 502 errors**
 - ✅ **Large text processing works reliably**
 - ✅ **Better error handling with specific HTTP status codes**
+- ✅ **Optimized timeout values prevent excessive waits**
+- ✅ **Maximum timeout reduced from 300s to 120s**
+- ✅ **Base timeout optimized from 120s to 60s**
+- ✅ **Scaling factor reduced from +10s to +5s per 1000 chars**
 
 ---
 
