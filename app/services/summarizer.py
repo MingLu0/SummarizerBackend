@@ -46,8 +46,8 @@ class OllamaService:
     async def summarize_text(
         self,
         text: str,
-        max_tokens: int = 256,
-        prompt: str = "Summarize the following text concisely:",
+        max_tokens: int = 100,
+        prompt: str = "Summarize concisely:",
     ) -> Dict[str, Any]:
         """
         Summarize text using Ollama.
@@ -55,9 +55,16 @@ class OllamaService:
         """
         start_time = time.time()
 
-        # Dynamic timeout: base + 5s per extra 1000 chars (cap 120s)
+        # Optimized timeout: base + 3s per extra 1000 chars (cap 60s)
         text_length = len(text)
-        dynamic_timeout = min(self.timeout + max(0, (text_length - 1000) // 1000 * 5), 120)
+        dynamic_timeout = min(self.timeout + max(0, (text_length - 1000) // 1000 * 3), 60)
+
+        # Preprocess text to reduce input size for faster processing
+        if text_length > 4000:
+            # Truncate very long texts and add note
+            text = text[:4000] + "\n\n[Text truncated for faster processing]"
+            text_length = len(text)
+            logger.info(f"Text truncated from {len(text)} to {text_length} chars for faster processing")
 
         logger.info(f"Processing text of {text_length} chars with timeout {dynamic_timeout}s")
 
@@ -69,7 +76,11 @@ class OllamaService:
             "stream": False,
             "options": {
                 "num_predict": max_tokens,
-                "temperature": 0.3,
+                "temperature": 0.1,  # Lower temperature for faster, more focused output
+                "top_p": 0.9,        # Nucleus sampling for efficiency
+                "top_k": 40,         # Limit vocabulary for speed
+                "repeat_penalty": 1.1,  # Prevent repetition
+                "num_ctx": 2048,     # Limit context window for speed
             },
         }
 
