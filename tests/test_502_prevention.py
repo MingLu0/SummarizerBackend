@@ -48,13 +48,13 @@ class Test502BadGatewayPrevention:
             # Verify extended timeout was used
             mock_client.assert_called_once()
             call_args = mock_client.call_args
-            expected_timeout = 120 + (10000 - 1000) // 1000 * 10  # 210 seconds
+            expected_timeout = 60 + (10000 - 1000) // 1000 * 5  # 105 seconds
             assert call_args[1]['timeout'] == expected_timeout
 
     @pytest.mark.integration
     def test_very_large_text_gets_capped_timeout(self):
         """Test that very large text gets capped timeout to prevent infinite waits."""
-        very_large_text = "A" * 100000  # 100,000 characters
+        very_large_text = "A" * 100000  # 100,000 characters (should exceed 120s cap)
         
         with patch('httpx.AsyncClient') as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=StubAsyncResponse())
@@ -64,14 +64,14 @@ class Test502BadGatewayPrevention:
                 json={"text": very_large_text, "max_tokens": 256}
             )
             
-            # Verify timeout is capped at 300 seconds
+            # Verify timeout is capped at 120 seconds
             mock_client.assert_called_once()
             call_args = mock_client.call_args
-            assert call_args[1]['timeout'] == 300  # Maximum cap
+            assert call_args[1]['timeout'] == 120  # Maximum cap
 
     @pytest.mark.integration
     def test_small_text_uses_base_timeout(self):
-        """Test that small text uses base timeout (30 seconds)."""
+        """Test that small text uses base timeout (60 seconds)."""
         small_text = "Short text"
         
         with patch('httpx.AsyncClient') as mock_client:
@@ -85,7 +85,7 @@ class Test502BadGatewayPrevention:
             # Verify base timeout was used
             mock_client.assert_called_once()
             call_args = mock_client.call_args
-            assert call_args[1]['timeout'] == 120  # Base timeout
+            assert call_args[1]['timeout'] == 60  # Base timeout
 
     @pytest.mark.integration
     def test_medium_text_gets_appropriate_timeout(self):
@@ -103,7 +103,7 @@ class Test502BadGatewayPrevention:
             # Verify appropriate timeout was used
             mock_client.assert_called_once()
             call_args = mock_client.call_args
-            expected_timeout = 120 + (5000 - 1000) // 1000 * 10  # 160 seconds
+            expected_timeout = 60 + (5000 - 1000) // 1000 * 5  # 80 seconds
             assert call_args[1]['timeout'] == expected_timeout
 
     @pytest.mark.integration
@@ -181,13 +181,13 @@ class Test502BadGatewayPrevention:
     def test_dynamic_timeout_calculation_formula(self):
         """Test the exact formula for dynamic timeout calculation."""
         test_cases = [
-            (500, 120),     # Small text: base timeout (120s)
-            (1000, 120),    # Exactly 1000 chars: base timeout (120s)
-            (1500, 120),    # 1500 chars: 120 + (500//1000)*10 = 120 + 0*10 = 120
-            (2000, 130),    # 2000 chars: 120 + (1000//1000)*10 = 120 + 1*10 = 130
-            (5000, 160),    # 5000 chars: 120 + (4000//1000)*10 = 120 + 4*10 = 160
-            (10000, 210),   # 10000 chars: 120 + (9000//1000)*10 = 120 + 9*10 = 210
-            (50000, 300),   # Very large: should be capped at 300
+            (500, 60),      # Small text: base timeout (60s)
+            (1000, 60),     # Exactly 1000 chars: base timeout (60s)
+            (1500, 60),     # 1500 chars: 60 + (500//1000)*5 = 60 + 0*5 = 60
+            (2000, 65),     # 2000 chars: 60 + (1000//1000)*5 = 60 + 1*5 = 65
+            (5000, 80),     # 5000 chars: 60 + (4000//1000)*5 = 60 + 4*5 = 80
+            (10000, 105),   # 10000 chars: 60 + (9000//1000)*5 = 60 + 9*5 = 105
+            (50000, 120),   # Very large: should be capped at 120
         ]
         
         for text_length, expected_timeout in test_cases:

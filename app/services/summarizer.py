@@ -43,10 +43,10 @@ class OllamaService:
         # Calculate dynamic timeout based on text length
         # Base timeout + additional time for longer texts
         text_length = len(text)
-        dynamic_timeout = self.timeout + max(0, (text_length - 1000) // 1000 * 10)  # +10s per 1000 chars over 1000
+        dynamic_timeout = self.timeout + max(0, (text_length - 1000) // 1000 * 5)  # +5s per 1000 chars over 1000
         
-        # Cap the timeout at 5 minutes to prevent extremely long waits
-        dynamic_timeout = min(dynamic_timeout, 300)
+        # Cap the timeout at 2 minutes to prevent extremely long waits
+        dynamic_timeout = min(dynamic_timeout, 120)
         
         logger.info(f"Processing text of {text_length} characters with timeout of {dynamic_timeout}s")
         

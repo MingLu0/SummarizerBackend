@@ -61,7 +61,7 @@ class TestOllamaService:
         """Test service initialization."""
         assert ollama_service.base_url == "http://127.0.0.1:11434"
         assert ollama_service.model == "llama3.2:latest"  # Updated to match current config
-        assert ollama_service.timeout == 120  # Updated to match current config
+        assert ollama_service.timeout == 60  # Updated to match current config
     
     @pytest.mark.asyncio
     async def test_summarize_text_success(self, ollama_service, mock_ollama_response):
@@ -175,24 +175,24 @@ class TestOllamaService:
             # Expected: 30s base + (5000-1000)/1000 * 10 = 30 + 40 = 70s
             mock_client.assert_called_once()
             call_args = mock_client.call_args
-            expected_timeout = 120 + (5000 - 1000) // 1000 * 10  # 160 seconds
+            expected_timeout = 60 + (5000 - 1000) // 1000 * 5  # 80 seconds
             assert call_args[1]['timeout'] == expected_timeout
 
     @pytest.mark.asyncio
     async def test_dynamic_timeout_maximum_cap(self, ollama_service, mock_ollama_response):
-        """Test that dynamic timeout is capped at 5 minutes (300 seconds)."""
+        """Test that dynamic timeout is capped at 2 minutes (120 seconds)."""
         stub_response = StubAsyncResponse(json_data=mock_ollama_response)
-        very_large_text = "A" * 50000  # 50000 characters (should exceed 300s cap)
+        very_large_text = "A" * 50000  # 50000 characters (should exceed 120s cap)
         
         with patch('httpx.AsyncClient') as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=stub_response)
             
             result = await ollama_service.summarize_text(very_large_text)
             
-            # Verify the timeout is capped at 300 seconds
+            # Verify the timeout is capped at 120 seconds
             mock_client.assert_called_once()
             call_args = mock_client.call_args
-            assert call_args[1]['timeout'] == 300  # Maximum cap
+            assert call_args[1]['timeout'] == 120  # Maximum cap
 
     @pytest.mark.asyncio
     async def test_dynamic_timeout_logging(self, ollama_service, mock_ollama_response, caplog):
@@ -214,7 +214,7 @@ class TestOllamaService:
     async def test_timeout_error_message_improvement(self, ollama_service):
         """Test that timeout errors now include dynamic timeout and text length info."""
         test_text = "A" * 2000  # 2000 characters
-        expected_timeout = 120 + (2000 - 1000) // 1000 * 10  # 130 seconds
+        expected_timeout = 60 + (2000 - 1000) // 1000 * 5  # 65 seconds
         
         with patch('httpx.AsyncClient', return_value=StubAsyncClient(post_exc=httpx.TimeoutException("Timeout"))):
             with pytest.raises(httpx.HTTPError) as exc_info:

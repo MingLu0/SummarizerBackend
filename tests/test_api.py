@@ -95,5 +95,5 @@ def test_summarize_endpoint_large_text_handling():
         # Verify the client was called with extended timeout
         mock_client.assert_called_once()
         call_args = mock_client.call_args
-        expected_timeout = 120 + (5000 - 1000) // 1000 * 10  # 160 seconds
+        expected_timeout = 60 + (5000 - 1000) // 1000 * 5  # 80 seconds
         assert call_args[1]['timeout'] == expected_timeout
