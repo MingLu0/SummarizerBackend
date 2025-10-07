@@ -55,9 +55,9 @@ class OllamaService:
         """
         start_time = time.time()
 
-        # Optimized timeout: base + 3s per extra 1000 chars (cap 60s)
+        # Optimized timeout: base + 3s per extra 1000 chars (cap 90s)
         text_length = len(text)
-        dynamic_timeout = min(self.timeout + max(0, (text_length - 1000) // 1000 * 3), 60)
+        dynamic_timeout = min(self.timeout + max(0, (text_length - 1000) // 1000 * 3), 90)
 
         # Preprocess text to reduce input size for faster processing
         if text_length > 4000:

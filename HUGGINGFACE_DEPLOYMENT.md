@@ -73,7 +73,7 @@ In your Hugging Face Space settings:
 ```
 OLLAMA_MODEL=mistral:7b
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_TIMEOUT=30
+OLLAMA_TIMEOUT=60
 SERVER_HOST=0.0.0.0
 SERVER_PORT=7860
 LOG_LEVEL=INFO

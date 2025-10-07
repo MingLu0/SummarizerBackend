@@ -33,7 +33,7 @@ class TestTimeoutOptimization:
         # Test the optimized formula directly
         base_timeout = 60  # Optimized base timeout
         scaling_factor = 5  # Optimized scaling factor
-        max_cap = 120  # Optimized maximum cap
+        max_cap = 90  # Optimized maximum cap
         
         # Test cases: (text_length, expected_timeout)
         test_cases = [
@@ -42,8 +42,8 @@ class TestTimeoutOptimization:
             (1500, 60),     # 1500 chars: 60 + (500//1000)*5 = 60 + 0*5 = 60
             (2000, 65),     # 2000 chars: 60 + (1000//1000)*5 = 60 + 1*5 = 65
             (5000, 80),     # 5000 chars: 60 + (4000//1000)*5 = 60 + 4*5 = 80
-            (10000, 105),   # 10000 chars: 60 + (9000//1000)*5 = 60 + 9*5 = 105
-            (50000, 120),   # Very large: should be capped at 120
+            (10000, 90),    # 10000 chars: 60 + (9000//1000)*5 = 60 + 9*5 = 105, capped at 90
+            (50000, 90),    # Very large: should be capped at 90
         ]
         
         for text_length, expected_timeout in test_cases:
@@ -72,17 +72,17 @@ class TestTimeoutOptimization:
         very_large_text_length = 100000  # 100,000 characters
         base_timeout = 60
         scaling_factor = 5
-        max_cap = 120  # Optimized cap
+        max_cap = 90  # Optimized cap
         
         # Calculate what the timeout would be without cap
         uncapped_timeout = base_timeout + max(0, (very_large_text_length - 1000) // 1000 * scaling_factor)
         
-        # Should be much higher than 120 without cap
-        assert uncapped_timeout > 120, f"Uncapped timeout should be > 120s, got {uncapped_timeout}"
+        # Should be much higher than 90 without cap
+        assert uncapped_timeout > 90, f"Uncapped timeout should be > 90s, got {uncapped_timeout}"
         
-        # With cap, should be exactly 120
+        # With cap, should be exactly 90
         capped_timeout = min(uncapped_timeout, max_cap)
-        assert capped_timeout == 120, f"Capped timeout should be 120s, got {capped_timeout}"
+        assert capped_timeout == 90, f"Capped timeout should be 90s, got {capped_timeout}"
 
     def test_timeout_optimization_prevents_excessive_waits(self):
         """Test that optimized timeouts prevent excessive waits like 100+ seconds."""
@@ -97,15 +97,15 @@ class TestTimeoutOptimization:
             dynamic_timeout = base_timeout + max(0, (text_length - 1000) // 1000 * scaling_factor)
             dynamic_timeout = min(dynamic_timeout, max_cap)
             
-            # No timeout should exceed 120 seconds
-            assert dynamic_timeout <= 120, \
-                f"Timeout for {text_length} chars should not exceed 120s, got {dynamic_timeout}"
+            # No timeout should exceed 90 seconds
+            assert dynamic_timeout <= 90, \
+                f"Timeout for {text_length} chars should not exceed 90s, got {dynamic_timeout}"
             
             # No timeout should be excessively long (like 100+ seconds for typical text)
             if text_length <= 20000:  # Typical text sizes
-                # Allow up to 120 seconds for 20k chars (which is reasonable and capped)
-                assert dynamic_timeout <= 120, \
-                    f"Timeout for typical text size {text_length} should not exceed 120s, got {dynamic_timeout}"
+                # Allow up to 90 seconds for 20k chars (which is reasonable and capped)
+                assert dynamic_timeout <= 90, \
+                    f"Timeout for typical text size {text_length} should not exceed 90s, got {dynamic_timeout}"
 
     def test_timeout_optimization_performance_improvement(self):
         """Test that timeout optimization provides better performance characteristics."""
@@ -122,13 +122,13 @@ class TestTimeoutOptimization:
         # New calculation (after optimization)
         new_base = 60
         new_scaling = 5
-        new_cap = 120
+        new_cap = 90
         new_timeout = new_base + max(0, (text_length - 1000) // 1000 * new_scaling)  # 60 + 9*5 = 105
-        new_timeout = min(new_timeout, new_cap)  # Capped at 120
+        new_timeout = min(new_timeout, new_cap)  # Capped at 90
         
         # New timeout should be significantly better
         assert new_timeout < old_timeout, f"New timeout {new_timeout}s should be less than old {old_timeout}s"
-        assert new_timeout == 105, f"New timeout should be 105s for 10k chars, got {new_timeout}"
+        assert new_timeout == 90, f"New timeout should be 90s for 10k chars (capped), got {new_timeout}"
         assert old_timeout == 210, f"Old timeout should be 210s for 10k chars, got {old_timeout}"
 
     def test_timeout_optimization_edge_cases(self):
@@ -166,14 +166,14 @@ class TestTimeoutOptimization:
         dynamic_timeout = base_timeout + max(0, (problematic_text_length - 1000) // 1000 * scaling_factor)
         dynamic_timeout = min(dynamic_timeout, max_cap)
         
-        # Should be 60 + (19000//1000)*5 = 60 + 19*5 = 155, capped at 120
-        expected_timeout = 120  # Capped at 120
+        # Should be 60 + (19000//1000)*5 = 60 + 19*5 = 155, capped at 90
+        expected_timeout = 90  # Capped at 90
         assert dynamic_timeout == expected_timeout, \
             f"Problematic text length should have capped timeout {expected_timeout}s, got {dynamic_timeout}"
         
         # Should not be 100+ seconds
-        assert dynamic_timeout <= 120, \
-            f"Optimized timeout should not exceed 120s, got {dynamic_timeout}"
+        assert dynamic_timeout <= 90, \
+            f"Optimized timeout should not exceed 90s, got {dynamic_timeout}"
         
         # Should be much better than the old calculation
         old_timeout = 120 + max(0, (problematic_text_length - 1000) // 1000 * 10)  # 120 + 19*10 = 310
