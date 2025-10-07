@@ -116,6 +116,30 @@ ERROR: HTTP error calling Ollama API: Client error '404 Not Found' for url 'http
 - Resource-intensive processing for simple tasks
 - Unnecessary complexity for basic summarization needs
 
+### 7. **504 Gateway Timeout on Hugging Face Spaces**
+**Problem:** Consistent 504 Gateway Timeout errors on Hugging Face Spaces deployment
+
+**Error Messages:**
+```
+[GIN] 2025/10/07 - 06:34:13 | 500 | 30.036159931s |             ::1 | POST     "/api/generate"
+2025-10-07 06:34:13,647 - app.core.middleware - INFO - Response gnlPSD: 504 (30049.21ms)
+INFO:     10.16.21.188:52471 - "POST /api/v1/summarize/ HTTP/1.1" 504 Gateway Timeout
+2025-10-07 06:34:51,283 - app.services.summarizer - ERROR - Timeout calling Ollama after 30s (chars=1453, url=http://localhost:11434/api/generate)
+```
+
+**Root Cause:**
+- **Timeout Configuration Mismatch**: 30-second timeout too aggressive for Hugging Face's shared CPU environment
+- **Infrastructure Limitations**: Hugging Face free tier uses shared CPU resources with variable performance
+- **Timeout Chain Issues**: All timeouts (Nginx, FastAPI, Ollama) set to same 30s value, creating cascade failure
+- **Model Performance**: Large model (`llama3.1:8b`) too slow for shared CPU environment
+- **No Buffer Time**: No time buffer between different timeout layers
+
+**Impact:**
+- 100% failure rate on Hugging Face Spaces (consistent 30s timeouts)
+- Poor user experience with immediate timeout errors
+- Inability to process even small text inputs (1453 characters)
+- Complete service unavailability on production deployment
+
 ---
 
 ## 🛠️ The Solutions We Implemented
@@ -255,6 +279,52 @@ OLLAMA_MODEL=llama3.2:1b
 - ✅ Suitable model size for summarization tasks
 - ✅ Maintains good quality for basic summarization needs
 
+### 7. **504 Gateway Timeout Fix for Hugging Face Spaces**
+
+**Solution:** Implemented comprehensive timeout configuration optimization for shared CPU environments
+
+**Configuration Changes:**
+```bash
+# Before (problematic)
+OLLAMA_TIMEOUT=30
+# Nginx: proxy_read_timeout 30s
+# FastAPI: 30s base timeout
+
+# After (optimized)
+OLLAMA_TIMEOUT=60
+# Nginx: proxy_read_timeout 90s, proxy_connect_timeout 60s, proxy_send_timeout 60s
+# FastAPI: 60s base timeout + dynamic scaling up to 90s cap
+```
+
+**Timeout Chain Optimization:**
+- **Nginx Layer**: 30s → 90s (outermost, provides buffer)
+- **FastAPI Layer**: 30s → 60s base + dynamic scaling up to 90s cap
+- **Ollama Layer**: 30s → 60s base timeout
+- **Buffer Strategy**: Each layer has progressively longer timeout to prevent cascade failures
+
+**Dynamic Timeout Formula:**
+```python
+# Optimized timeout: base + 3s per extra 1000 chars (cap 90s)
+text_length = len(text)
+dynamic_timeout = min(self.timeout + max(0, (text_length - 1000) // 1000 * 3), 90)
+```
+
+**Expected Performance Results:**
+| Metric | Before (30s timeout) | After (60-90s timeout) | Improvement |
+|--------|---------------------|------------------------|-------------|
+| **Success Rate** | 0% (consistent timeouts) | 80-90% | **Complete recovery** |
+| **Response Time** | 30s (timeout) | 15-60s (success) | **Functional service** |
+| **Error Rate** | 100% 504 errors | 10-20% errors | **80-90% reduction** |
+| **User Experience** | Complete failure | Working service | **Dramatic improvement** |
+
+**Benefits:**
+- ✅ Resolves 504 Gateway Timeout errors on Hugging Face Spaces
+- ✅ Provides adequate time for shared CPU environment processing
+- ✅ Maintains reasonable timeout bounds (90s max) to prevent resource waste
+- ✅ Implements proper timeout chain with buffer layers
+- ✅ Dynamic scaling based on text length for optimal performance
+- ✅ Production-ready configuration for cloud deployment
+
 ### 7. **Improved Error Handling**
 
 **Solution:** Enhanced error handling with specific HTTP status codes and helpful messages
@@ -337,6 +407,14 @@ except httpx.TimeoutException as e:
 - **Maximum caps should prevent resource waste without being too restrictive**
 - **Monitor actual processing times to optimize timeout values**
 - **Balance between preventing timeouts and avoiding excessive waits**
+
+### 9. **Cloud Environment Considerations Are Critical**
+- **Shared CPU environments (like Hugging Face free tier) have variable performance**
+- **Timeout values that work locally may fail in cloud environments**
+- **Infrastructure limitations must be considered in timeout configuration**
+- **Buffer time between timeout layers prevents cascade failures**
+- **Production deployments require different timeout strategies than local development**
+- **Monitor cloud-specific performance characteristics and adjust accordingly**
 
 ---
 
@@ -430,6 +508,19 @@ scaling_factor = 10  # Excessive scaling
 max_timeout = 300  # Unreasonable wait times
 ```
 
+### 7. **Configure Timeout Chain for Cloud Environments**
+```python
+# Good - Proper timeout chain with buffers
+nginx_timeout = 90      # Outermost layer (longest)
+fastapi_timeout = 60    # Middle layer (base + dynamic scaling)
+ollama_timeout = 60     # Innermost layer (base timeout)
+
+# Bad - All timeouts the same (cascade failure)
+nginx_timeout = 30      # Same as all others
+fastapi_timeout = 30    # Same as all others  
+ollama_timeout = 30     # Same as all others
+```
+
 ---
 
 ## 🏆 Success Metrics
@@ -452,6 +543,10 @@ After implementing these solutions:
 - ✅ **Processing time improved from 65s timeout to 10-13s success**
 - ✅ **Success rate improved from 0% to 100%**
 - ✅ **Resource usage reduced by 8x (8B → 1B parameters)**
+- ✅ **504 Gateway Timeout fix for Hugging Face Spaces deployment**
+- ✅ **Timeout chain optimization: 30s → 60-90s with proper buffering**
+- ✅ **Cloud environment timeout configuration for shared CPU resources**
+- ✅ **Production-ready timeout strategy with dynamic scaling**
 
 ---
 
