@@ -11,7 +11,7 @@ app_port: 7860
 
 # Text Summarizer API
 
-A FastAPI-based text summarization service powered by Ollama and Mistral 7B model.
+A FastAPI-based text summarization service powered by Ollama and Llama 3.2 1B model.
 
 ## 🚀 Features
 
@@ -36,7 +36,7 @@ Content-Type: application/json
 {
   "text": "Your long text to summarize here...",
   "max_tokens": 256,
-  "temperature": 0.7
+  "prompt": "Summarize the following text concisely:"
 }
 ```
 
@@ -48,11 +48,11 @@ Content-Type: application/json
 
 The service uses the following environment variables:
 
-- `OLLAMA_MODEL`: Model to use (default: `mistral:7b`)
-- `OLLAMA_HOST`: Ollama service host (default: `http://localhost:11434`)
-- `OLLAMA_TIMEOUT`: Request timeout in seconds (default: `30`)
-- `SERVER_HOST`: Server host (default: `0.0.0.0`)
-- `SERVER_PORT`: Server port (default: `7860`)
+- `OLLAMA_MODEL`: Model to use (default: `llama3.2:1b`)
+- `OLLAMA_HOST`: Ollama service host (default: `http://0.0.0.0:11434`)
+- `OLLAMA_TIMEOUT`: Request timeout in seconds (default: `60`)
+- `SERVER_HOST`: Server host (default: `127.0.0.1`)
+- `SERVER_PORT`: Server port (default: `8000`)
 - `LOG_LEVEL`: Logging level (default: `INFO`)
 
 ## 🐳 Docker Deployment
@@ -63,7 +63,7 @@ The service uses the following environment variables:
 docker-compose up --build
 
 # Or run directly
-docker build -f Dockerfile.hf -t summarizer-app .
+docker build -t summarizer-app .
 docker run -p 7860:7860 summarizer-app
 ```
 
@@ -72,10 +72,10 @@ This app is configured for deployment on Hugging Face Spaces using Docker SDK.
 
 ## 📊 Performance
 
-- **Model**: Mistral 7B (7GB RAM requirement)
-- **Startup time**: ~2-3 minutes (includes model download)
-- **Inference speed**: ~2-5 seconds per request
-- **Memory usage**: ~8GB RAM
+- **Model**: Llama 3.2 1B (~1GB RAM requirement)
+- **Startup time**: ~1-2 minutes (includes model download)
+- **Inference speed**: ~1-3 seconds per request
+- **Memory usage**: ~2GB RAM
 
 ## 🛠️ Development
 
@@ -85,7 +85,7 @@ This app is configured for deployment on Hugging Face Spaces using Docker SDK.
 pip install -r requirements.txt
 
 # Run locally
-uvicorn app.main:app --host 0.0.0.0 --port 7860
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ### Testing
@@ -146,7 +146,7 @@ The service includes:
 ### Common Issues
 
 1. **Model not loading**: Check if Ollama is running and model is pulled
-2. **Out of memory**: Ensure sufficient RAM (8GB+) for Mistral 7B
+2. **Out of memory**: Ensure sufficient RAM (2GB+) for Llama 3.2 1B
 3. **Slow startup**: Normal on first run due to model download
 4. **API errors**: Check logs via `/docs` endpoint
 
