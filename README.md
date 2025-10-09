@@ -18,10 +18,21 @@ A FastAPI-based text summarization service powered by Ollama and Llama 3.2 1B mo
 ## 🚀 Features
 
 - **Fast text summarization** using local LLM inference
+- **Real-time streaming** with Server-Sent Events (SSE) for Android compatibility
 - **RESTful API** with FastAPI
 - **Health monitoring** and logging
 - **Docker containerized** for easy deployment
 - **Free deployment** on Hugging Face Spaces
+
+## 🌊 Streaming Benefits
+
+The streaming endpoint (`/api/v1/summarize/stream`) provides several advantages:
+
+- **Real-time feedback**: Users see text being generated as it happens
+- **Better UX**: No waiting for complete response before seeing results
+- **Android-friendly**: Uses Server-Sent Events (SSE) for easy mobile integration
+- **Progressive loading**: Content appears incrementally, improving perceived performance
+- **Error resilience**: Errors are sent as SSE events, maintaining connection
 
 ## 📡 API Endpoints
 
@@ -30,7 +41,7 @@ A FastAPI-based text summarization service powered by Ollama and Llama 3.2 1B mo
 GET /health
 ```
 
-### Summarize Text
+### Summarize Text (Standard)
 ```
 POST /api/v1/summarize
 Content-Type: application/json
@@ -40,6 +51,29 @@ Content-Type: application/json
   "max_tokens": 256,
   "prompt": "Summarize the following text concisely:"
 }
+```
+
+### Summarize Text (Streaming)
+```
+POST /api/v1/summarize/stream
+Content-Type: application/json
+
+{
+  "text": "Your long text to summarize here...",
+  "max_tokens": 256,
+  "prompt": "Summarize the following text concisely:"
+}
+```
+
+**Response Format**: Server-Sent Events (SSE)
+```
+data: {"content": "This", "done": false, "tokens_used": 1}
+
+data: {"content": " is", "done": false, "tokens_used": 2}
+
+data: {"content": " a", "done": false, "tokens_used": 3}
+
+data: {"content": " summary.", "done": true, "tokens_used": 4}
 ```
 
 ### API Documentation
@@ -78,6 +112,7 @@ This app is configured for deployment on Hugging Face Spaces using Docker SDK.
 - **Startup time**: ~1-2 minutes (includes model download)
 - **Inference speed**: ~1-3 seconds per request
 - **Memory usage**: ~2GB RAM
+- **Streaming**: Real-time text generation with SSE for responsive user experience
 
 ## 🛠️ Development
 
@@ -101,7 +136,7 @@ pytest --cov=app
 
 ## 📝 Usage Examples
 
-### Python
+### Python (Standard)
 ```python
 import requests
 
@@ -118,7 +153,30 @@ result = response.json()
 print(result["summary"])
 ```
 
-### cURL
+### Python (Streaming)
+```python
+import requests
+import json
+
+# Stream summarization
+response = requests.post(
+    "https://huggingface.co/spaces/colin730/SummarizerApp/api/v1/summarize/stream",
+    json={
+        "text": "Your long article or text here...",
+        "max_tokens": 256
+    },
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line.startswith(b'data: '):
+        data = json.loads(line[6:])  # Remove 'data: ' prefix
+        print(data["content"], end='', flush=True)
+        if data["done"]:
+            break
+```
+
+### cURL (Standard)
 ```bash
 curl -X POST "https://huggingface.co/spaces/colin730/SummarizerApp/api/v1/summarize" \
   -H "Content-Type: application/json" \
@@ -126,6 +184,46 @@ curl -X POST "https://huggingface.co/spaces/colin730/SummarizerApp/api/v1/summar
     "text": "Your text to summarize...",
     "max_tokens": 256
   }'
+```
+
+### cURL (Streaming)
+```bash
+curl -N -X POST "https://huggingface.co/spaces/colin730/SummarizerApp/api/v1/summarize/stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Your text to summarize...",
+    "max_tokens": 256
+  }'
+```
+
+### Android (Kotlin)
+```kotlin
+// Add to build.gradle
+implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
+
+// Usage
+val client = OkHttpClient()
+val request = Request.Builder()
+    .url("https://huggingface.co/spaces/colin730/SummarizerApp/api/v1/summarize/stream")
+    .post(/* JSON body */)
+    .build()
+
+val eventSource = EventSources.createFactory(client)
+    .newEventSource(request, object : EventSourceListener() {
+        override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
+            val chunk = JSONObject(data)
+            val content = chunk.getString("content")
+            val done = chunk.getBoolean("done")
+            
+            // Update UI with streaming content
+            runOnUiThread {
+                textView.append(content)
+                if (done) {
+                    // Streaming complete
+                }
+            }
+        }
+    })
 ```
 
 ## 🔒 Security
