@@ -13,6 +13,8 @@ app_port: 7860
 
 A FastAPI-based text summarization service powered by Ollama and Llama 3.2 1B model.
 
+**🚀 Live Demo**: [https://huggingface.co/spaces/colin730/SummarizerApp](https://huggingface.co/spaces/colin730/SummarizerApp)
+
 ## 🚀 Features
 
 - **Fast text summarization** using local LLM inference
@@ -105,7 +107,7 @@ import requests
 
 # Summarize text
 response = requests.post(
-    "https://your-space.hf.space/api/v1/summarize",
+    "https://huggingface.co/spaces/colin730/SummarizerApp/api/v1/summarize",
     json={
         "text": "Your long article or text here...",
         "max_tokens": 256
@@ -118,7 +120,7 @@ print(result["summary"])
 
 ### cURL
 ```bash
-curl -X POST "https://your-space.hf.space/api/v1/summarize" \
+curl -X POST "https://huggingface.co/spaces/colin730/SummarizerApp/api/v1/summarize" \
   -H "Content-Type: application/json" \
   -d '{
     "text": "Your text to summarize...",
