@@ -224,3 +224,258 @@ class TestOllamaService:
             error_message = str(exc_info.value)
             assert f"timeout after {expected_timeout}s" in error_message
             assert "Text may be too long or complex" in error_message
+
+    # Tests for Streaming Functionality
+    @pytest.mark.asyncio
+    async def test_summarize_text_stream_success(self, ollama_service):
+        """Test successful text streaming."""
+        # Mock streaming response data
+        mock_stream_data = [
+            '{"response": "This", "done": false, "eval_count": 1}\n',
+            '{"response": " is", "done": false, "eval_count": 2}\n',
+            '{"response": " a", "done": false, "eval_count": 3}\n',
+            '{"response": " test", "done": true, "eval_count": 4}\n'
+        ]
+        
+        class MockStreamResponse:
+            def __init__(self, data):
+                self.data = data
+                self._index = 0
+            
+            async def aiter_lines(self):
+                for line in self.data:
+                    yield line
+            
+            def raise_for_status(self):
+                # Mock successful response
+                pass
+        
+        mock_response = MockStreamResponse(mock_stream_data)
+        
+        class MockStreamContextManager:
+            def __init__(self, response):
+                self.response = response
+            
+            async def __aenter__(self):
+                return self.response
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+        
+        class MockStreamClient:
+            async def __aenter__(self):
+                return self
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+            
+            def stream(self, method, url, **kwargs):
+                # Return an async context manager
+                return MockStreamContextManager(mock_response)
+        
+        with patch('httpx.AsyncClient', return_value=MockStreamClient()):
+            chunks = []
+            async for chunk in ollama_service.summarize_text_stream("Test text"):
+                chunks.append(chunk)
+            
+            assert len(chunks) == 4
+            assert chunks[0]["content"] == "This"
+            assert chunks[0]["done"] is False
+            assert chunks[0]["tokens_used"] == 1
+            assert chunks[-1]["content"] == " test"
+            assert chunks[-1]["done"] is True
+            assert chunks[-1]["tokens_used"] == 4
+
+    @pytest.mark.asyncio
+    async def test_summarize_text_stream_with_custom_params(self, ollama_service):
+        """Test streaming with custom parameters."""
+        mock_stream_data = ['{"response": "Summary", "done": true, "eval_count": 1}\n']
+        
+        class MockStreamResponse:
+            def __init__(self, data):
+                self.data = data
+            
+            async def aiter_lines(self):
+                for line in self.data:
+                    yield line
+            
+            def raise_for_status(self):
+                # Mock successful response
+                pass
+        
+        mock_response = MockStreamResponse(mock_stream_data)
+        captured_payload = {}
+        
+        class MockStreamContextManager:
+            def __init__(self, response):
+                self.response = response
+            
+            async def __aenter__(self):
+                return self.response
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+        
+        class MockStreamClient:
+            async def __aenter__(self):
+                return self
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+            
+            def stream(self, method, url, **kwargs):
+                captured_payload.update(kwargs.get('json', {}))
+                return MockStreamContextManager(mock_response)
+        
+        with patch('httpx.AsyncClient', return_value=MockStreamClient()):
+            chunks = []
+            async for chunk in ollama_service.summarize_text_stream(
+                "Test text",
+                max_tokens=512,
+                prompt="Custom prompt"
+            ):
+                chunks.append(chunk)
+            
+            # Verify captured payload
+            assert captured_payload["stream"] is True
+            assert captured_payload["options"]["num_predict"] == 512
+            assert "Custom prompt" in captured_payload["prompt"]
+
+    @pytest.mark.asyncio
+    async def test_summarize_text_stream_timeout(self, ollama_service):
+        """Test streaming timeout handling."""
+        class MockStreamClient:
+            async def __aenter__(self):
+                return self
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+            
+            def stream(self, method, url, **kwargs):
+                raise httpx.TimeoutException("Timeout")
+        
+        with patch('httpx.AsyncClient', return_value=MockStreamClient()):
+            with pytest.raises(httpx.TimeoutException):
+                chunks = []
+                async for chunk in ollama_service.summarize_text_stream("Test text"):
+                    chunks.append(chunk)
+
+    @pytest.mark.asyncio
+    async def test_summarize_text_stream_http_error(self, ollama_service):
+        """Test streaming HTTP error handling."""
+        http_error = httpx.HTTPStatusError("Bad Request", request=MagicMock(), response=MagicMock())
+        
+        class MockStreamClient:
+            async def __aenter__(self):
+                return self
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+            
+            def stream(self, method, url, **kwargs):
+                raise http_error
+        
+        with patch('httpx.AsyncClient', return_value=MockStreamClient()):
+            with pytest.raises(httpx.HTTPStatusError):
+                chunks = []
+                async for chunk in ollama_service.summarize_text_stream("Test text"):
+                    chunks.append(chunk)
+
+    @pytest.mark.asyncio
+    async def test_summarize_text_stream_empty_response(self, ollama_service):
+        """Test streaming with empty response."""
+        mock_stream_data = []
+        
+        class MockStreamResponse:
+            def __init__(self, data):
+                self.data = data
+            
+            async def aiter_lines(self):
+                for line in self.data:
+                    yield line
+            
+            def raise_for_status(self):
+                # Mock successful response
+                pass
+        
+        mock_response = MockStreamResponse(mock_stream_data)
+        
+        class MockStreamContextManager:
+            def __init__(self, response):
+                self.response = response
+            
+            async def __aenter__(self):
+                return self.response
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+        
+        class MockStreamClient:
+            async def __aenter__(self):
+                return self
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+            
+            def stream(self, method, url, **kwargs):
+                return MockStreamContextManager(mock_response)
+        
+        with patch('httpx.AsyncClient', return_value=MockStreamClient()):
+            chunks = []
+            async for chunk in ollama_service.summarize_text_stream("Test text"):
+                chunks.append(chunk)
+            
+            assert len(chunks) == 0
+
+    @pytest.mark.asyncio
+    async def test_summarize_text_stream_malformed_json(self, ollama_service):
+        """Test streaming with malformed JSON response."""
+        mock_stream_data = [
+            '{"response": "Valid", "done": false, "eval_count": 1}\n',
+            'invalid json line\n',
+            '{"response": "End", "done": true, "eval_count": 2}\n'
+        ]
+        
+        class MockStreamResponse:
+            def __init__(self, data):
+                self.data = data
+            
+            async def aiter_lines(self):
+                for line in self.data:
+                    yield line
+            
+            def raise_for_status(self):
+                # Mock successful response
+                pass
+        
+        mock_response = MockStreamResponse(mock_stream_data)
+        
+        class MockStreamContextManager:
+            def __init__(self, response):
+                self.response = response
+            
+            async def __aenter__(self):
+                return self.response
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+        
+        class MockStreamClient:
+            async def __aenter__(self):
+                return self
+            
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+            
+            def stream(self, method, url, **kwargs):
+                return MockStreamContextManager(mock_response)
+        
+        with patch('httpx.AsyncClient', return_value=MockStreamClient()):
+            chunks = []
+            async for chunk in ollama_service.summarize_text_stream("Test text"):
+                chunks.append(chunk)
+            
+            # Should skip malformed JSON and continue with valid chunks
+            assert len(chunks) == 2
+            assert chunks[0]["content"] == "Valid"
+            assert chunks[1]["content"] == "End"

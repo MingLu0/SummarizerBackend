@@ -42,6 +42,14 @@ class HealthResponse(BaseModel):
     ollama: Optional[str] = Field(None, description="Ollama service status")
 
 
+class StreamChunk(BaseModel):
+    """Schema for streaming response chunks."""
+    
+    content: str = Field(..., description="Content chunk from the stream")
+    done: bool = Field(..., description="Whether this is the final chunk")
+    tokens_used: Optional[int] = Field(None, description="Number of tokens used so far")
+
+
 class ErrorResponse(BaseModel):
     """Error response schema."""
     
