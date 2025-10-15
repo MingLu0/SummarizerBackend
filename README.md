@@ -168,3 +168,4 @@ MIT License - see LICENSE file for details.
 ---
 
 **Deployed on Hugging Face Spaces** 🚀
+# Auto-deploy setup complete
