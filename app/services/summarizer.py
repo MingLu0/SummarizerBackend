@@ -219,6 +219,33 @@ class OllamaService:
             # Present a consistent error type to callers
             raise httpx.HTTPError(f"Ollama API error: {e}") from e
 
+    async def warm_up_model(self) -> None:
+        """
+        Warm up the Ollama model by executing a minimal generation.
+        This loads model weights into memory for faster subsequent requests.
+        """
+        warmup_payload = {
+            "model": self.model,
+            "prompt": "Hi",
+            "stream": False,
+            "options": {
+                "num_predict": 1,  # Minimal tokens
+                "temperature": 0.1,
+            },
+        }
+        
+        generate_url = urljoin(self.base_url, "api/generate")
+        logger.info(f"POST {generate_url} (warmup)")
+        
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(generate_url, json=warmup_payload)
+                resp.raise_for_status()
+                logger.info("✅ Model warmup successful")
+        except Exception as e:
+            logger.error(f"❌ Model warmup failed: {e}")
+            raise
+
     async def check_health(self) -> bool:
         """
         Verify Ollama is reachable and (optionally) that the model exists.

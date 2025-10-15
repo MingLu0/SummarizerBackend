@@ -1,6 +1,7 @@
 """
 Main FastAPI application for text summarizer backend.
 """
+import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -63,6 +64,16 @@ async def startup_event():
         logger.error(f"❌ Failed to connect to Ollama: {e}")
         logger.error(f"   Please check that Ollama is running at {settings.ollama_host}")
         logger.error(f"   And that model '{settings.ollama_model}' is installed")
+    
+    # Warm up the model
+    logger.info("🔥 Warming up Ollama model...")
+    try:
+        warmup_start = time.time()
+        await ollama_service.warm_up_model()
+        warmup_time = time.time() - warmup_start
+        logger.info(f"✅ Model warmup completed in {warmup_time:.2f}s")
+    except Exception as e:
+        logger.warning(f"⚠️ Model warmup failed: {e}")
 
 
 @app.on_event("shutdown")
