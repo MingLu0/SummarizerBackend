@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 import httpx
 from app.api.v1.schemas import SummarizeRequest, SummarizeResponse
 from app.services.summarizer import ollama_service
+from app.services.transformers_summarizer import transformers_service
 
 router = APIRouter()
 
@@ -84,6 +85,42 @@ async def summarize_stream(payload: SummarizeRequest):
     """Stream text summarization using Server-Sent Events (SSE)."""
     return StreamingResponse(
         _stream_generator(payload),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+async def _pipeline_stream_generator(payload: SummarizeRequest):
+    """Generator function for Transformers pipeline streaming SSE responses."""
+    try:
+        async for chunk in transformers_service.summarize_text_stream(
+            text=payload.text,
+            max_length=payload.max_tokens or 130,
+        ):
+            # Format as SSE event
+            sse_data = json.dumps(chunk)
+            yield f"data: {sse_data}\n\n"
+            
+    except Exception as e:
+        # Send error event in SSE format
+        error_chunk = {
+            "content": "",
+            "done": True,
+            "error": f"Pipeline summarization failed: {str(e)}"
+        }
+        sse_data = json.dumps(error_chunk)
+        yield f"data: {sse_data}\n\n"
+        return  # Don't raise exception in streaming context
+
+
+@router.post("/pipeline/stream")
+async def summarize_pipeline_stream(payload: SummarizeRequest):
+    """Fast streaming summarization using Transformers pipeline (8-12s response time)."""
+    return StreamingResponse(
+        _pipeline_stream_generator(payload),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

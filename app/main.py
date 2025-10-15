@@ -11,6 +11,7 @@ from app.api.v1.routes import api_router
 from app.core.middleware import request_context_middleware
 from app.core.errors import init_exception_handlers
 from app.services.summarizer import ollama_service
+from app.services.transformers_summarizer import transformers_service
 
 # Set up logging
 setup_logging()
@@ -19,8 +20,8 @@ logger = get_logger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="Text Summarizer API",
-    description="A FastAPI backend for text summarization using Ollama",
-    version="1.0.0",
+    description="A FastAPI backend with dual summarization engines: Ollama (llama3.2:1b) and Transformers (distilbart) pipeline for speed",
+    version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -65,15 +66,25 @@ async def startup_event():
         logger.error(f"   Please check that Ollama is running at {settings.ollama_host}")
         logger.error(f"   And that model '{settings.ollama_model}' is installed")
     
-    # Warm up the model
+    # Warm up the Ollama model
     logger.info("🔥 Warming up Ollama model...")
     try:
         warmup_start = time.time()
         await ollama_service.warm_up_model()
         warmup_time = time.time() - warmup_start
-        logger.info(f"✅ Model warmup completed in {warmup_time:.2f}s")
+        logger.info(f"✅ Ollama model warmup completed in {warmup_time:.2f}s")
     except Exception as e:
-        logger.warning(f"⚠️ Model warmup failed: {e}")
+        logger.warning(f"⚠️ Ollama model warmup failed: {e}")
+    
+    # Warm up the Transformers pipeline model
+    logger.info("🔥 Warming up Transformers pipeline model...")
+    try:
+        pipeline_start = time.time()
+        await transformers_service.warm_up_model()
+        pipeline_time = time.time() - pipeline_start
+        logger.info(f"✅ Pipeline warmup completed in {pipeline_time:.2f}s")
+    except Exception as e:
+        logger.warning(f"⚠️ Pipeline warmup failed: {e}")
 
 
 @app.on_event("shutdown")
