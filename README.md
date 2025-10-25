@@ -40,6 +40,24 @@ POST /api/v1/summarize/pipeline/stream
 POST /api/v2/summarize/stream
 ```
 
+## 🌐 Live Deployment
+
+**✅ Successfully deployed and tested on Hugging Face Spaces!**
+
+- **Live Space:** https://colin730-SummarizerApp.hf.space
+- **API Documentation:** https://colin730-SummarizerApp.hf.space/docs
+- **Health Check:** https://colin730-SummarizerApp.hf.space/health
+- **V2 Streaming API:** https://colin730-SummarizerApp.hf.space/api/v2/summarize/stream
+
+### Quick Test
+```bash
+# Test the live deployment
+curl https://colin730-SummarizerApp.hf.space/health
+curl -X POST https://colin730-SummarizerApp.hf.space/api/v2/summarize/stream \
+  -H "Content-Type: application/json" \
+  -d '{"text":"This is a test of the live API.","max_tokens":50}'
+```
+
 **Request Format (V1 and V2 compatible):**
 ```json
 {
@@ -153,10 +171,11 @@ pytest --cov=app
 ### V1 API (Ollama)
 ```python
 import requests
+import json
 
 # V1 streaming summarization
 response = requests.post(
-    "https://your-space.hf.space/api/v1/summarize/stream",
+    "https://colin730-SummarizerApp.hf.space/api/v1/summarize/stream",
     json={
         "text": "Your long article or text here...",
         "max_tokens": 256
@@ -172,14 +191,14 @@ for line in response.iter_lines():
             break
 ```
 
-### V2 API (HuggingFace Streaming)
+### V2 API (HuggingFace Streaming) - Recommended
 ```python
 import requests
 import json
 
 # V2 streaming summarization (same request format as V1)
 response = requests.post(
-    "https://your-space.hf.space/api/v2/summarize/stream",
+    "https://colin730-SummarizerApp.hf.space/api/v2/summarize/stream",
     json={
         "text": "Your long article or text here...",
         "max_tokens": 128  # V2 uses max_new_tokens
@@ -200,7 +219,7 @@ for line in response.iter_lines():
 // Android SSE client example
 val client = OkHttpClient()
 val request = Request.Builder()
-    .url("https://your-space.hf.space/api/v2/summarize/stream")
+    .url("https://colin730-SummarizerApp.hf.space/api/v2/summarize/stream")
     .post(RequestBody.create(
         MediaType.parse("application/json"),
         """{"text": "Your text...", "max_tokens": 128}"""
@@ -227,15 +246,24 @@ client.newCall(request).enqueue(object : Callback {
 
 ### cURL Examples
 ```bash
-# V1 API
-curl -X POST "https://your-space.hf.space/api/v1/summarize/stream" \
+# Test live deployment
+curl https://colin730-SummarizerApp.hf.space/health
+
+# V1 API (if Ollama is available)
+curl -X POST "https://colin730-SummarizerApp.hf.space/api/v1/summarize/stream" \
   -H "Content-Type: application/json" \
   -d '{"text": "Your text...", "max_tokens": 256}'
 
-# V2 API (same format, just change /api/v1/ to /api/v2/)
-curl -X POST "https://your-space.hf.space/api/v2/summarize/stream" \
+# V2 API (HuggingFace streaming - recommended)
+curl -X POST "https://colin730-SummarizerApp.hf.space/api/v2/summarize/stream" \
   -H "Content-Type: application/json" \
   -d '{"text": "Your text...", "max_tokens": 128}'
+```
+
+### Test Script
+```bash
+# Use the included test script
+./scripts/test_endpoints.sh https://colin730-SummarizerApp.hf.space
 ```
 
 ## 🔒 Security
@@ -279,5 +307,20 @@ MIT License - see LICENSE file for details.
 
 ---
 
-**Deployed on Hugging Face Spaces** 🚀
-# Auto-deploy setup complete
+## ✅ Deployment Status
+
+**Successfully deployed and tested on Hugging Face Spaces!** 🚀
+
+- ✅ **Proxy-aware FastAPI** with `root_path` support
+- ✅ **All endpoints working** (health, docs, V2 API)
+- ✅ **Real-time streaming** summarization
+- ✅ **No 404 errors** - all paths correctly configured
+- ✅ **Test script included** for easy verification
+
+### Recent Fixes Applied
+- Added `root_path=os.getenv("HF_SPACE_ROOT_PATH", "")` for HF Spaces proxy awareness
+- Ensured binding to `0.0.0.0:7860` as required by HF Spaces
+- Verified V2 router paths (`/api/v2/summarize/stream`) with no double prefixes
+- Created test script for external endpoint verification
+
+**Live Space:** https://colin730-SummarizerApp.hf.space 🎯
