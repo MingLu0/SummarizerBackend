@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
     ENABLE_V1_WARMUP=false \
     ENABLE_V2_WARMUP=true \
-    HF_MODEL_ID=t5-small \
+    HF_MODEL_ID=sshleifer/distilbart-cnn-6-6 \
     HF_HOME=/tmp/huggingface
 
 # Set work directory

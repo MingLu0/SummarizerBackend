@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     max_tokens_default: int = Field(default=256, env="MAX_TOKENS_DEFAULT", ge=1)
     
     # V2 HuggingFace Configuration
-    hf_model_id: str = Field(default="t5-small", env="HF_MODEL_ID")
+    hf_model_id: str = Field(default="sshleifer/distilbart-cnn-6-6", env="HF_MODEL_ID")
     hf_device_map: str = Field(default="auto", env="HF_DEVICE_MAP")  # "auto" for GPU fallback to CPU
     hf_torch_dtype: str = Field(default="auto", env="HF_TORCH_DTYPE")  # "auto" for automatic dtype selection
     hf_cache_dir: str = Field(default="/tmp/huggingface", env="HF_HOME")  # HuggingFace cache directory

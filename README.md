@@ -82,7 +82,7 @@ The service uses the following environment variables:
 - `ENABLE_V1_WARMUP`: Enable V1 warmup (default: `false`)
 
 ### V2 Configuration (HuggingFace)
-- `HF_MODEL_ID`: HuggingFace model ID (default: `t5-small`)
+- `HF_MODEL_ID`: HuggingFace model ID (default: `sshleifer/distilbart-cnn-6-6`)
 - `HF_DEVICE_MAP`: Device mapping (default: `auto` for GPU fallback to CPU)
 - `HF_TORCH_DTYPE`: Torch dtype (default: `auto`)
 - `HF_HOME`: HuggingFace cache directory (default: `/tmp/huggingface`)
@@ -121,7 +121,7 @@ This app is optimized for deployment on Hugging Face Spaces using Docker SDK.
 ```bash
 ENABLE_V1_WARMUP=false
 ENABLE_V2_WARMUP=true
-HF_MODEL_ID=t5-small
+HF_MODEL_ID=sshleifer/distilbart-cnn-6-6
 HF_HOME=/tmp/huggingface
 ```
 
@@ -134,7 +134,7 @@ HF_HOME=/tmp/huggingface
 - **Startup time**: ~30-60 seconds (when V1 warmup enabled)
 
 ### V2 (HuggingFace Streaming) - Primary on HF Spaces
-- **V2 Model**: t5-small (~250MB download)
+- **V2 Model**: sshleifer/distilbart-cnn-6-6 (~300MB download)
 - **Memory usage**: ~500MB RAM (when V2 warmup enabled)
 - **Inference speed**: Real-time token streaming
 - **Startup time**: ~30-60 seconds (includes model download when V2 warmup enabled)
@@ -144,7 +144,7 @@ HF_HOME=/tmp/huggingface
 - **V2 warmup enabled by default** (`ENABLE_V2_WARMUP=true`)
 - **HuggingFace Spaces**: V2-only deployment (no Ollama)
 - **Local development**: V1 endpoints work if Ollama is running externally
-- **t5-small model**: Optimized for HuggingFace Spaces free tier
+- **distilbart-cnn-6-6 model**: Optimized for HuggingFace Spaces free tier with CNN/DailyMail fine-tuning
 
 ## 🛠️ Development
 

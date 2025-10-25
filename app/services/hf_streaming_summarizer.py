@@ -93,8 +93,15 @@ class HFStreamingSummarizer:
             logger.warning("⚠️ HuggingFace model not initialized, skipping warmup")
             return
             
-        # Use T5 format for warmup
-        test_prompt = "summarize: This is a test."
+        # Determine appropriate test prompt based on model type
+        if "t5" in settings.hf_model_id.lower():
+            test_prompt = "summarize: This is a test."
+        elif "bart" in settings.hf_model_id.lower():
+            # BART models expect direct text input
+            test_prompt = "This is a test article for summarization."
+        else:
+            # Generic fallback
+            test_prompt = "This is a test article for summarization."
         
         try:
             # Run in executor to avoid blocking
@@ -173,6 +180,15 @@ class HFStreamingSummarizer:
                     full_prompt, 
                     return_tensors="pt", 
                     max_length=512, 
+                    truncation=True
+                )
+            elif "bart" in settings.hf_model_id.lower():
+                # BART models (including DistilBART) expect direct text input
+                # No prefixes or chat templates needed
+                inputs = self.tokenizer(
+                    text,
+                    return_tensors="pt",
+                    max_length=1024,
                     truncation=True
                 )
             else:
@@ -267,8 +283,16 @@ class HFStreamingSummarizer:
             return False
         
         try:
-            # Quick test generation with T5 format
-            test_input = self.tokenizer("summarize: test", return_tensors="pt")
+            # Determine appropriate test input based on model type
+            if "t5" in settings.hf_model_id.lower():
+                test_input_text = "summarize: test"
+            elif "bart" in settings.hf_model_id.lower():
+                # BART models expect direct text input
+                test_input_text = "This is a test article."
+            else:
+                test_input_text = "This is a test article."
+            
+            test_input = self.tokenizer(test_input_text, return_tensors="pt")
             test_input = test_input.to(self.model.device)
             
             with torch.no_grad():
