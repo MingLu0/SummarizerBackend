@@ -34,9 +34,10 @@ class Settings(BaseSettings):
     max_tokens_default: int = Field(default=256, env="MAX_TOKENS_DEFAULT", ge=1)
     
     # V2 HuggingFace Configuration
-    hf_model_id: str = Field(default="microsoft/Phi-3-mini-4k-instruct", env="HF_MODEL_ID")
+    hf_model_id: str = Field(default="t5-small", env="HF_MODEL_ID")
     hf_device_map: str = Field(default="auto", env="HF_DEVICE_MAP")  # "auto" for GPU fallback to CPU
     hf_torch_dtype: str = Field(default="auto", env="HF_TORCH_DTYPE")  # "auto" for automatic dtype selection
+    hf_cache_dir: str = Field(default="/tmp/huggingface", env="HF_HOME")  # HuggingFace cache directory
     hf_max_new_tokens: int = Field(default=128, env="HF_MAX_NEW_TOKENS", ge=1, le=2048)
     hf_temperature: float = Field(default=0.7, env="HF_TEMPERATURE", ge=0.0, le=2.0)
     hf_top_p: float = Field(default=0.95, env="HF_TOP_P", ge=0.0, le=1.0)

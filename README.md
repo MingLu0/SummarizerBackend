@@ -64,9 +64,10 @@ The service uses the following environment variables:
 - `ENABLE_V1_WARMUP`: Enable V1 warmup (default: `false`)
 
 ### V2 Configuration (HuggingFace)
-- `HF_MODEL_ID`: HuggingFace model ID (default: `microsoft/Phi-3-mini-4k-instruct`)
+- `HF_MODEL_ID`: HuggingFace model ID (default: `t5-small`)
 - `HF_DEVICE_MAP`: Device mapping (default: `auto` for GPU fallback to CPU)
 - `HF_TORCH_DTYPE`: Torch dtype (default: `auto`)
+- `HF_HOME`: HuggingFace cache directory (default: `/tmp/huggingface`)
 - `HF_MAX_NEW_TOKENS`: Max new tokens (default: `128`)
 - `HF_TEMPERATURE`: Sampling temperature (default: `0.7`)
 - `HF_TOP_P`: Nucleus sampling (default: `0.95`)
@@ -90,7 +91,21 @@ docker run -p 7860:7860 summarizer-app
 ```
 
 ### Hugging Face Spaces
-This app is configured for deployment on Hugging Face Spaces using Docker SDK.
+This app is optimized for deployment on Hugging Face Spaces using Docker SDK.
+
+**V2-Only Deployment on HF Spaces:**
+- Uses `t5-small` model (~250MB) for fast startup
+- No Ollama dependency (saves memory and disk space)
+- Model downloads during warmup for instant first request
+- Optimized for free tier resource limits
+
+**Environment Variables for HF Spaces:**
+```bash
+ENABLE_V1_WARMUP=false
+ENABLE_V2_WARMUP=true
+HF_MODEL_ID=t5-small
+HF_HOME=/tmp/huggingface
+```
 
 ## 📊 Performance
 
@@ -100,17 +115,18 @@ This app is configured for deployment on Hugging Face Spaces using Docker SDK.
 - **Inference speed**: ~2-5 seconds per request
 - **Startup time**: ~30-60 seconds (when V1 warmup enabled)
 
-### V2 (HuggingFace Streaming)
-- **V2 Model**: microsoft/Phi-3-mini-4k-instruct (~7GB download)
-- **Memory usage**: ~8-12GB RAM (when V2 warmup enabled)
+### V2 (HuggingFace Streaming) - Primary on HF Spaces
+- **V2 Model**: t5-small (~250MB download)
+- **Memory usage**: ~500MB RAM (when V2 warmup enabled)
 - **Inference speed**: Real-time token streaming
-- **Startup time**: ~2-3 minutes (includes model download when V2 warmup enabled)
+- **Startup time**: ~30-60 seconds (includes model download when V2 warmup enabled)
 
 ### Memory Optimization
 - **V1 warmup disabled by default** (`ENABLE_V1_WARMUP=false`)
 - **V2 warmup enabled by default** (`ENABLE_V2_WARMUP=true`)
-- Only one model loads into memory at startup
-- V1 endpoints still work if Ollama is running externally
+- **HuggingFace Spaces**: V2-only deployment (no Ollama)
+- **Local development**: V1 endpoints work if Ollama is running externally
+- **t5-small model**: Optimized for HuggingFace Spaces free tier
 
 ## 🛠️ Development
 

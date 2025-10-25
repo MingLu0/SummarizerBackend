@@ -36,20 +36,22 @@ class HFStreamingSummarizer:
         logger.info(f"Initializing HuggingFace model: {settings.hf_model_id}")
         
         try:
-            # Load tokenizer
+            # Load tokenizer with cache directory
             self.tokenizer = AutoTokenizer.from_pretrained(
                 settings.hf_model_id, 
-                use_fast=True
+                use_fast=True,
+                cache_dir=settings.hf_cache_dir
             )
             
             # Determine torch dtype
             torch_dtype = self._get_torch_dtype()
             
-            # Load model with device mapping
+            # Load model with device mapping and cache directory
             self.model = AutoModelForCausalLM.from_pretrained(
                 settings.hf_model_id,
                 torch_dtype=torch_dtype,
-                device_map=settings.hf_device_map if settings.hf_device_map != "auto" else "auto"
+                device_map=settings.hf_device_map if settings.hf_device_map != "auto" else "auto",
+                cache_dir=settings.hf_cache_dir
             )
             
             # Set model to eval mode
@@ -158,24 +160,35 @@ class HFStreamingSummarizer:
             temperature = temperature or settings.hf_temperature
             top_p = top_p or settings.hf_top_p
             
-            # Build messages for chat template
-            messages = [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": text}
-            ]
-            
-            # Apply chat template if available, otherwise use simple prompt
-            if hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template:
-                inputs = self.tokenizer.apply_chat_template(
-                    messages, 
-                    tokenize=True, 
-                    add_generation_prompt=True, 
-                    return_tensors="pt"
+            # Check if model is t5 (doesn't use chat templates)
+            if "t5" in settings.hf_model_id.lower():
+                # t5 models use simple prompt format for summarization
+                full_prompt = f"summarize: {text}"
+                inputs = self.tokenizer(
+                    full_prompt, 
+                    return_tensors="pt", 
+                    max_length=512, 
+                    truncation=True
                 )
             else:
-                # Fallback to simple prompt format
-                full_prompt = f"{prompt}\n\n{text}"
-                inputs = self.tokenizer(full_prompt, return_tensors="pt")
+                # Other models use chat template
+                messages = [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text}
+                ]
+                
+                # Apply chat template if available, otherwise use simple prompt
+                if hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template:
+                    inputs = self.tokenizer.apply_chat_template(
+                        messages, 
+                        tokenize=True, 
+                        add_generation_prompt=True, 
+                        return_tensors="pt"
+                    )
+                else:
+                    # Fallback to simple prompt format
+                    full_prompt = f"{prompt}\n\n{text}"
+                    inputs = self.tokenizer(full_prompt, return_tensors="pt")
             
             inputs = inputs.to(self.model.device)
             
