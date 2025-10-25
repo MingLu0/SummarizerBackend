@@ -11,7 +11,7 @@ class SummarizeRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=32000, description="Text to summarize")
     max_tokens: Optional[int] = Field(default=256, ge=1, le=2048, description="Maximum tokens for summary")
     prompt: Optional[str] = Field(
-        default="Summarize the following text concisely:",
+        default="Provide a comprehensive summary of the following text, including main arguments, key findings, important details, and specific examples. Structure your response clearly:",
         max_length=500,
         description="Custom prompt for summarization"
     )

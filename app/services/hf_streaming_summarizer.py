@@ -138,7 +138,7 @@ class HFStreamingSummarizer:
         max_new_tokens: int = None,
         temperature: float = None,
         top_p: float = None,
-        prompt: str = "Summarize the following text concisely:",
+        prompt: str = "Provide a comprehensive summary of the following text, including main arguments, key findings, important details, and specific examples. Structure your response clearly:",
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream text summarization using HuggingFace's TextIteratorStreamer.

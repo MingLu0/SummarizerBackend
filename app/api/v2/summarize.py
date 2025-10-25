@@ -32,7 +32,7 @@ async def _stream_generator(payload: SummarizeRequest):
             max_new_tokens=payload.max_tokens or 128,  # Map max_tokens to max_new_tokens
             temperature=0.7,  # Use default temperature
             top_p=0.95,  # Use default top_p
-            prompt=payload.prompt or "Summarize the following text concisely:",
+            prompt=payload.prompt or "Provide a comprehensive summary of the following text, including main arguments, key findings, important details, and specific examples. Structure your response clearly:",
         ):
             # Format as SSE event (same format as V1)
             sse_data = json.dumps(chunk)
