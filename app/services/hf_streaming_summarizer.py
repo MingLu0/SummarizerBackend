@@ -22,6 +22,32 @@ except ImportError:
     logger.warning("Transformers library not available. V2 endpoints will be disabled.")
 
 
+def _split_into_chunks(s: str, chunk_chars: int = 5000, overlap: int = 400) -> list[str]:
+    """
+    Split text into overlapping chunks to handle very long inputs.
+    
+    Args:
+        s: Input text to split
+        chunk_chars: Target characters per chunk
+        overlap: Overlap between chunks in characters
+        
+    Returns:
+        List of text chunks
+    """
+    chunks = []
+    i = 0
+    n = len(s)
+    while i < n:
+        j = min(i + chunk_chars, n)
+        chunks.append(s[i:j])
+        if j >= n:
+            break
+        i = j - overlap
+        if i < 0:
+            i = 0
+    return chunks
+
+
 class HFStreamingSummarizer:
     """Service for streaming text summarization using HuggingFace's lower-level API."""
 
@@ -169,17 +195,26 @@ class HFStreamingSummarizer:
         logger.info(f"Processing text of {text_length} chars with HuggingFace model: {settings.hf_model_id}")
         
         try:
-            # Use provided parameters or defaults
-            max_new_tokens = max_new_tokens or settings.hf_max_new_tokens
+            # Use provided parameters or sensible defaults
+            # Aim for ~200–400 tokens summary by default.
+            # If settings.hf_max_new_tokens is small, override with 256.
+            max_new_tokens = max_new_tokens or max(getattr(settings, "hf_max_new_tokens", 0) or 0, 256)
             temperature = temperature or settings.hf_temperature
             top_p = top_p or settings.hf_top_p
+            
+            # Determine a generous encoder max length (respect tokenizer.model_max_length)
+            model_max = getattr(self.tokenizer, "model_max_length", 1024)
+            # Handle case where model_max_length might be None, 0, or not a valid int
+            if not isinstance(model_max, int) or model_max <= 0:
+                model_max = 1024
+            enc_max_len = min(model_max, 2048)  # cap to 2k to avoid OOM on small Spaces
             
             # Build tokenized inputs (normalize return types across tokenizers)
             if "t5" in settings.hf_model_id.lower():
                 full_prompt = f"summarize: {text}"
-                inputs_raw = self.tokenizer(full_prompt, return_tensors="pt", max_length=512, truncation=True)
+                inputs_raw = self.tokenizer(full_prompt, return_tensors="pt", max_length=enc_max_len, truncation=True)
             elif "bart" in settings.hf_model_id.lower():
-                inputs_raw = self.tokenizer(text, return_tensors="pt", max_length=1024, truncation=True)
+                inputs_raw = self.tokenizer(text, return_tensors="pt", max_length=enc_max_len, truncation=True)
             else:
                 messages = [
                     {"role": "system", "content": prompt},
@@ -188,10 +223,7 @@ class HFStreamingSummarizer:
                 
                 if hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template:
                     inputs_raw = self.tokenizer.apply_chat_template(
-                        messages, 
-                        tokenize=True, 
-                        add_generation_prompt=True, 
-                        return_tensors="pt"
+                        messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
                     )
                 else:
                     full_prompt = f"{prompt}\n\n{text}"
@@ -211,14 +243,15 @@ class HFStreamingSummarizer:
 
             # Ensure attention_mask only if missing AND input_ids is a Tensor
             if "attention_mask" not in inputs and "input_ids" in inputs:
-                if isinstance(inputs["input_ids"], torch.Tensor):
+                # Check if torch is available and input is a tensor
+                if TRANSFORMERS_AVAILABLE and 'torch' in globals() and isinstance(inputs["input_ids"], torch.Tensor):
                     inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
 
             # --- HARDEN: force singleton batch across all tensor fields ---
             def _to_singleton_batch(d):
                 out = {}
                 for k, v in d.items():
-                    if isinstance(v, torch.Tensor):
+                    if TRANSFORMERS_AVAILABLE and 'torch' in globals() and isinstance(v, torch.Tensor):
                         if v.dim() == 1:                # [seq] -> [1, seq]
                             out[k] = v.unsqueeze(0)
                         elif v.dim() >= 2:
@@ -233,8 +266,8 @@ class HFStreamingSummarizer:
 
             # Final assert: crash early with clear log if still batched
             _iid = inputs.get("input_ids", None)
-            if isinstance(_iid, torch.Tensor) and _iid.dim() >= 2 and _iid.size(0) != 1:
-                _shapes = {k: tuple(v.shape) for k, v in inputs.items() if isinstance(v, torch.Tensor)}
+            if TRANSFORMERS_AVAILABLE and 'torch' in globals() and isinstance(_iid, torch.Tensor) and _iid.dim() >= 2 and _iid.size(0) != 1:
+                _shapes = {k: tuple(v.shape) for k, v in inputs.items() if TRANSFORMERS_AVAILABLE and 'torch' in globals() and isinstance(v, torch.Tensor)}
                 logger.error(f"Input still batched after normalization: shapes={_shapes}")
                 raise ValueError("SingletonBatchEnforceFailed: input_ids batch dimension != 1")
 
@@ -286,6 +319,13 @@ class HFStreamingSummarizer:
             gen_kwargs["num_return_sequences"] = 1
             gen_kwargs["num_beams"] = 1
             gen_kwargs["num_beam_groups"] = 1
+            # Ensure we don't stop too early; set a floor and slightly favor longer generations
+            gen_kwargs["min_new_tokens"] = max(96, min(192, max_new_tokens // 2))  # floor ~100–192
+            # length_penalty > 1.0 encourages longer outputs on encoder-decoder models
+            gen_kwargs["length_penalty"] = 1.1
+            # Reduce premature EOS in some checkpoints (optional)
+            gen_kwargs["no_repeat_ngram_size"] = 3
+            gen_kwargs["repetition_penalty"] = 1.05
             # Extra safety: remove any stray args that imply multiple sequences
             for k in ("num_beam_groups", "num_beams", "num_return_sequences"):
                 # Reassert values in case something upstream re-injected them
