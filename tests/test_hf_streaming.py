@@ -119,6 +119,30 @@ class TestHFStreamingSummarizer:
             # Expected when torch is not available
             pass
 
+    @pytest.mark.asyncio
+    async def test_streaming_single_batch(self):
+        """Test that streaming enforces batch size = 1 and completes successfully."""
+        service = HFStreamingSummarizer()
+        
+        # Skip if model not initialized (transformers not available)
+        if not service.model or not service.tokenizer:
+            pytest.skip("Transformers not available")
+        
+        chunks = []
+        async for chunk in service.summarize_text_stream(
+            text="This is a short test article about New Zealand tech news.",
+            max_new_tokens=32,
+            temperature=0.7,
+            top_p=0.9,
+            prompt="Summarize:"
+        ):
+            chunks.append(chunk)
+        
+        # Should complete without ValueError and have a final done=True
+        assert len(chunks) > 0
+        assert any(c.get("done") for c in chunks)
+        assert all("error" not in c or c.get("error") is None for c in chunks if not c.get("done"))
+
 
 class TestHFStreamingServiceIntegration:
     """Test the global HF streaming service instance."""

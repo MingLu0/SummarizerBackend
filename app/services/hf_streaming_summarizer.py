@@ -172,57 +172,40 @@ class HFStreamingSummarizer:
             temperature = temperature or settings.hf_temperature
             top_p = top_p or settings.hf_top_p
             
-            # Check if model is t5 (doesn't use chat templates)
+            # --- Build tokenized inputs robustly ---
             if "t5" in settings.hf_model_id.lower():
-                # t5 models use simple prompt format for summarization
                 full_prompt = f"summarize: {text}"
-                inputs = self.tokenizer(
-                    full_prompt, 
-                    return_tensors="pt", 
-                    max_length=512, 
-                    truncation=True
-                )
+                inputs_raw = self.tokenizer(full_prompt, return_tensors="pt", max_length=512, truncation=True)
             elif "bart" in settings.hf_model_id.lower():
-                # BART models (including DistilBART) expect direct text input
-                # No prefixes or chat templates needed
-                inputs = self.tokenizer(
-                    text,
-                    return_tensors="pt",
-                    max_length=1024,
-                    truncation=True
-                )
+                inputs_raw = self.tokenizer(text, return_tensors="pt", max_length=1024, truncation=True)
             else:
-                # Other models use chat template
                 messages = [
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": text}
+                    {"role": "user", "content": text},
                 ]
-                
-                # Apply chat template if available, otherwise use simple prompt
                 if hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template:
-                    inputs = self.tokenizer.apply_chat_template(
-                        messages, 
-                        tokenize=True, 
-                        add_generation_prompt=True, 
-                        return_tensors="pt"
+                    inputs_raw = self.tokenizer.apply_chat_template(
+                        messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
                     )
                 else:
-                    # Fallback to simple prompt format
                     full_prompt = f"{prompt}\n\n{text}"
-                    inputs = self.tokenizer(full_prompt, return_tensors="pt")
-            
-            inputs = inputs.to(self.model.device)
-            
-            # CRITICAL FIX: Ensure batch size is 1 for TextIteratorStreamer
-            # The streamer only works with batch size 1, so we need to ensure
-            # that all input tensors have batch dimension of 1
-            for key, tensor in inputs.items():
-                if tensor.dim() > 1 and tensor.size(0) > 1:
-                    # If batch size > 1, take only the first sample
-                    inputs[key] = tensor[:1]
-                elif tensor.dim() == 1:
-                    # If tensor is 1D, add batch dimension
-                    inputs[key] = tensor.unsqueeze(0)
+                    inputs_raw = self.tokenizer(full_prompt, return_tensors="pt")
+
+            # Normalize to dict regardless of tokenizer return type
+            if isinstance(inputs_raw, dict):
+                inputs = inputs_raw
+            else:
+                inputs = {"input_ids": inputs_raw}
+
+            # Move to model device
+            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+
+            # Enforce batch size == 1 for streamer safety
+            for k, v in list(inputs.items()):
+                if v.dim() == 1:
+                    inputs[k] = v.unsqueeze(0)      # [seq] -> [1, seq]
+                elif v.dim() >= 2 and v.size(0) > 1:
+                    inputs[k] = v[:1]               # [B, ...] -> [1, ...]
             
             # Create streamer for token-by-token output
             streamer = TextIteratorStreamer(
@@ -241,6 +224,8 @@ class HFStreamingSummarizer:
                 "top_p": top_p,
                 "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             }
+            # Streamer only supports a single sequence
+            gen_kwargs["num_return_sequences"] = 1
             
             # Run generation in background thread
             generation_thread = threading.Thread(
