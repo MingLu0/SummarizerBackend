@@ -107,6 +107,7 @@ async def startup_event():
             logger.info(f"✅ HuggingFace model warmup completed in {hf_time:.2f}s")
         except Exception as e:
             logger.warning(f"⚠️ HuggingFace model warmup failed: {e}")
+            logger.warning("V2 endpoints will be disabled until model loads successfully")
     else:
         logger.info("⏭️ Skipping V2 HuggingFace warmup (disabled)")
 

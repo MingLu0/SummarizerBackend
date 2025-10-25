@@ -63,6 +63,9 @@ class HFStreamingSummarizer:
             
         except Exception as e:
             logger.error(f"❌ Failed to initialize HuggingFace model: {e}")
+            logger.error(f"Model ID: {settings.hf_model_id}")
+            logger.error(f"Cache dir: {settings.hf_cache_dir}")
+            logger.error(f"Device map: {settings.hf_device_map}")
             self.tokenizer = None
             self.model = None
 
