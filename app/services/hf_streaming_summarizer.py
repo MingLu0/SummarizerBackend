@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 
 # Try to import transformers, but make it optional
 try:
-    from transformers import AutoTokenizer, AutoModelForCausalLM, TextIteratorStreamer
+    from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, TextIteratorStreamer
     import torch
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -27,7 +27,7 @@ class HFStreamingSummarizer:
     def __init__(self):
         """Initialize the HuggingFace model and tokenizer."""
         self.tokenizer: Optional[AutoTokenizer] = None
-        self.model: Optional[AutoModelForCausalLM] = None
+        self.model: Optional[AutoModelForSeq2SeqLM] = None
         
         if not TRANSFORMERS_AVAILABLE:
             logger.warning("⚠️ Transformers not available - V2 endpoints will not work")
@@ -47,7 +47,7 @@ class HFStreamingSummarizer:
             torch_dtype = self._get_torch_dtype()
             
             # Load model with device mapping and cache directory
-            self.model = AutoModelForCausalLM.from_pretrained(
+            self.model = AutoModelForSeq2SeqLM.from_pretrained(
                 settings.hf_model_id,
                 torch_dtype=torch_dtype,
                 device_map=settings.hf_device_map if settings.hf_device_map != "auto" else "auto",
@@ -90,7 +90,8 @@ class HFStreamingSummarizer:
             logger.warning("⚠️ HuggingFace model not initialized, skipping warmup")
             return
             
-        test_prompt = "Summarize this: This is a test."
+        # Use T5 format for warmup
+        test_prompt = "summarize: This is a test."
         
         try:
             # Run in executor to avoid blocking
@@ -116,6 +117,7 @@ class HFStreamingSummarizer:
                 max_new_tokens=5,
                 do_sample=False,
                 temperature=0.1,
+                pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             )
 
     async def summarize_text_stream(
@@ -199,7 +201,7 @@ class HFStreamingSummarizer:
                 skip_special_tokens=True
             )
             
-            # Generation parameters
+            # Generation parameters - T5 models use different parameters
             gen_kwargs = {
                 **inputs,
                 "streamer": streamer,
@@ -207,7 +209,7 @@ class HFStreamingSummarizer:
                 "do_sample": True,
                 "temperature": temperature,
                 "top_p": top_p,
-                "eos_token_id": self.tokenizer.eos_token_id,
+                "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
             }
             
             # Run generation in background thread
@@ -262,8 +264,8 @@ class HFStreamingSummarizer:
             return False
         
         try:
-            # Quick test generation
-            test_input = self.tokenizer("Test", return_tensors="pt")
+            # Quick test generation with T5 format
+            test_input = self.tokenizer("summarize: test", return_tensors="pt")
             test_input = test_input.to(self.model.device)
             
             with torch.no_grad():
@@ -271,6 +273,7 @@ class HFStreamingSummarizer:
                     **test_input,
                     max_new_tokens=1,
                     do_sample=False,
+                    pad_token_id=self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
                 )
             return True
         except Exception as e:
