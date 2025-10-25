@@ -1,6 +1,7 @@
 """
 Main FastAPI application for text summarizer backend.
 """
+import os
 import time
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -26,6 +27,8 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
+    # Make app aware of reverse-proxy prefix used by HF Spaces (if any)
+    root_path=os.getenv("HF_SPACE_ROOT_PATH", ""),
 )
 
 # Add CORS middleware
@@ -152,3 +155,10 @@ async def debug_config():
         "enable_v1_warmup": settings.enable_v1_warmup,
         "enable_v2_warmup": settings.enable_v2_warmup
     }
+
+
+if __name__ == "__main__":
+    # Local/dev runner. On HF Spaces, the platform will spawn uvicorn for main:app,
+    # but this keeps behavior consistent if launched manually.
+    import uvicorn
+    uvicorn.run("app.main:app", host="0.0.0.0", port=7860, reload=False)
