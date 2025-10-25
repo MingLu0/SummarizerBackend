@@ -14,6 +14,7 @@ logger = get_logger(__name__)
 # Try to import transformers, but make it optional
 try:
     from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, TextIteratorStreamer
+    from transformers.tokenization_utils_base import BatchEncoding
     import torch
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
@@ -195,16 +196,22 @@ class HFStreamingSummarizer:
                     full_prompt = f"{prompt}\n\n{text}"
                     inputs_raw = self.tokenizer(full_prompt, return_tensors="pt")
 
-            # Normalize to dict regardless of return type
-            if isinstance(inputs_raw, dict):
-                inputs = inputs_raw
+            # Normalize to a plain dict regardless of return type
+            if isinstance(inputs_raw, (dict, BatchEncoding)):
+                # Convert BatchEncoding to a real dict of tensors
+                try:
+                    inputs = dict(inputs_raw)
+                except Exception:
+                    # Fallback for older HF where .data exists
+                    inputs = dict(getattr(inputs_raw, "data", {}))
             else:
+                # Some tokenizers return a single tensor when return_tensors="pt"
                 inputs = {"input_ids": inputs_raw}
 
-            # Ensure attention_mask (some tokenizers/models don't return it by default)
+            # Ensure attention_mask only if missing AND input_ids is a Tensor
             if "attention_mask" not in inputs and "input_ids" in inputs:
-                import torch
-                inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
+                if isinstance(inputs["input_ids"], torch.Tensor):
+                    inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
 
             # Enforce batch size == 1 for streamer
             for k, v in list(inputs.items()):
@@ -226,6 +233,13 @@ class HFStreamingSummarizer:
             elif pad_id is None and eos_id is None:
                 # Last resort: set pad to 0 to avoid None in generate()
                 pad_id = 0
+
+            # Helpful debug: confirm types after normalization
+            try:
+                _types = {k: type(v).__name__ for k, v in inputs.items()}
+                logger.debug(f"HF V2 inputs types: {_types}")
+            except Exception:
+                pass
 
             # Helpful debug: log shapes once
             try:
