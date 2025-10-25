@@ -28,15 +28,24 @@ A FastAPI-based text summarization service powered by Ollama and Mistral 7B mode
 GET /health
 ```
 
-### Summarize Text
+### V1 API (Ollama + Transformers Pipeline)
 ```
 POST /api/v1/summarize
-Content-Type: application/json
+POST /api/v1/summarize/stream
+POST /api/v1/summarize/pipeline/stream
+```
 
+### V2 API (HuggingFace Streaming)
+```
+POST /api/v2/summarize/stream
+```
+
+**Request Format (V1 and V2 compatible):**
+```json
 {
   "text": "Your long text to summarize here...",
   "max_tokens": 256,
-  "temperature": 0.7
+  "prompt": "Summarize the following text concisely:"
 }
 ```
 
@@ -48,11 +57,24 @@ Content-Type: application/json
 
 The service uses the following environment variables:
 
-- `OLLAMA_MODEL`: Model to use (default: `mistral:7b`)
+### V1 Configuration (Ollama)
+- `OLLAMA_MODEL`: Model to use (default: `llama3.2:1b`)
 - `OLLAMA_HOST`: Ollama service host (default: `http://localhost:11434`)
-- `OLLAMA_TIMEOUT`: Request timeout in seconds (default: `30`)
-- `SERVER_HOST`: Server host (default: `0.0.0.0`)
-- `SERVER_PORT`: Server port (default: `7860`)
+- `OLLAMA_TIMEOUT`: Request timeout in seconds (default: `60`)
+- `ENABLE_V1_WARMUP`: Enable V1 warmup (default: `false`)
+
+### V2 Configuration (HuggingFace)
+- `HF_MODEL_ID`: HuggingFace model ID (default: `microsoft/Phi-3-mini-4k-instruct`)
+- `HF_DEVICE_MAP`: Device mapping (default: `auto` for GPU fallback to CPU)
+- `HF_TORCH_DTYPE`: Torch dtype (default: `auto`)
+- `HF_MAX_NEW_TOKENS`: Max new tokens (default: `128`)
+- `HF_TEMPERATURE`: Sampling temperature (default: `0.7`)
+- `HF_TOP_P`: Nucleus sampling (default: `0.95`)
+- `ENABLE_V2_WARMUP`: Enable V2 warmup (default: `true`)
+
+### Server Configuration
+- `SERVER_HOST`: Server host (default: `127.0.0.1`)
+- `SERVER_PORT`: Server port (default: `8000`)
 - `LOG_LEVEL`: Logging level (default: `INFO`)
 
 ## 🐳 Docker Deployment
@@ -72,10 +94,23 @@ This app is configured for deployment on Hugging Face Spaces using Docker SDK.
 
 ## 📊 Performance
 
-- **Model**: Mistral 7B (7GB RAM requirement)
-- **Startup time**: ~2-3 minutes (includes model download)
+### V1 (Ollama + Transformers Pipeline)
+- **V1 Models**: llama3.2:1b (Ollama) + distilbart-cnn-6-6 (Transformers)
+- **Memory usage**: ~2-4GB RAM (when V1 warmup enabled)
 - **Inference speed**: ~2-5 seconds per request
-- **Memory usage**: ~8GB RAM
+- **Startup time**: ~30-60 seconds (when V1 warmup enabled)
+
+### V2 (HuggingFace Streaming)
+- **V2 Model**: microsoft/Phi-3-mini-4k-instruct (~7GB download)
+- **Memory usage**: ~8-12GB RAM (when V2 warmup enabled)
+- **Inference speed**: Real-time token streaming
+- **Startup time**: ~2-3 minutes (includes model download when V2 warmup enabled)
+
+### Memory Optimization
+- **V1 warmup disabled by default** (`ENABLE_V1_WARMUP=false`)
+- **V2 warmup enabled by default** (`ENABLE_V2_WARMUP=true`)
+- Only one model loads into memory at startup
+- V1 endpoints still work if Ollama is running externally
 
 ## 🛠️ Development
 
@@ -99,31 +134,92 @@ pytest --cov=app
 
 ## 📝 Usage Examples
 
-### Python
+### V1 API (Ollama)
 ```python
 import requests
 
-# Summarize text
+# V1 streaming summarization
 response = requests.post(
-    "https://your-space.hf.space/api/v1/summarize",
+    "https://your-space.hf.space/api/v1/summarize/stream",
     json={
         "text": "Your long article or text here...",
         "max_tokens": 256
-    }
+    },
+    stream=True
 )
 
-result = response.json()
-print(result["summary"])
+for line in response.iter_lines():
+    if line.startswith(b'data: '):
+        data = json.loads(line[6:])
+        print(data["content"], end="")
+        if data["done"]:
+            break
 ```
 
-### cURL
+### V2 API (HuggingFace Streaming)
+```python
+import requests
+import json
+
+# V2 streaming summarization (same request format as V1)
+response = requests.post(
+    "https://your-space.hf.space/api/v2/summarize/stream",
+    json={
+        "text": "Your long article or text here...",
+        "max_tokens": 128  # V2 uses max_new_tokens
+    },
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line.startswith(b'data: '):
+        data = json.loads(line[6:])
+        print(data["content"], end="")
+        if data["done"]:
+            break
+```
+
+### Android Client (SSE)
+```kotlin
+// Android SSE client example
+val client = OkHttpClient()
+val request = Request.Builder()
+    .url("https://your-space.hf.space/api/v2/summarize/stream")
+    .post(RequestBody.create(
+        MediaType.parse("application/json"),
+        """{"text": "Your text...", "max_tokens": 128}"""
+    ))
+    .build()
+
+client.newCall(request).enqueue(object : Callback {
+    override fun onResponse(call: Call, response: Response) {
+        val source = response.body()?.source()
+        source?.use { bufferedSource ->
+            while (true) {
+                val line = bufferedSource.readUtf8Line()
+                if (line?.startsWith("data: ") == true) {
+                    val json = line.substring(6)
+                    val data = Gson().fromJson(json, Map::class.java)
+                    // Update UI with data["content"]
+                    if (data["done"] == true) break
+                }
+            }
+        }
+    }
+})
+```
+
+### cURL Examples
 ```bash
-curl -X POST "https://your-space.hf.space/api/v1/summarize" \
+# V1 API
+curl -X POST "https://your-space.hf.space/api/v1/summarize/stream" \
   -H "Content-Type: application/json" \
-  -d '{
-    "text": "Your text to summarize...",
-    "max_tokens": 256
-  }'
+  -d '{"text": "Your text...", "max_tokens": 256}'
+
+# V2 API (same format, just change /api/v1/ to /api/v2/)
+curl -X POST "https://your-space.hf.space/api/v2/summarize/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Your text...", "max_tokens": 128}'
 ```
 
 ## 🔒 Security
