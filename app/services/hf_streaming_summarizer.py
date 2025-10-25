@@ -213,6 +213,17 @@ class HFStreamingSummarizer:
             
             inputs = inputs.to(self.model.device)
             
+            # CRITICAL FIX: Ensure batch size is 1 for TextIteratorStreamer
+            # The streamer only works with batch size 1, so we need to ensure
+            # that all input tensors have batch dimension of 1
+            for key, tensor in inputs.items():
+                if tensor.dim() > 1 and tensor.size(0) > 1:
+                    # If batch size > 1, take only the first sample
+                    inputs[key] = tensor[:1]
+                elif tensor.dim() == 1:
+                    # If tensor is 1D, add batch dimension
+                    inputs[key] = tensor.unsqueeze(0)
+            
             # Create streamer for token-by-token output
             streamer = TextIteratorStreamer(
                 self.tokenizer, 
