@@ -213,13 +213,29 @@ class HFStreamingSummarizer:
                 if isinstance(inputs["input_ids"], torch.Tensor):
                     inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
 
-            # Enforce batch size == 1 for streamer
-            for k, v in list(inputs.items()):
-                if hasattr(v, "dim"):
-                    if v.dim() == 1:
-                        inputs[k] = v.unsqueeze(0)          # [seq] -> [1, seq]
-                    elif v.dim() >= 2 and v.size(0) > 1:
-                        inputs[k] = v[:1]                   # [B, ...] -> [1, ...]
+            # --- HARDEN: force singleton batch across all tensor fields ---
+            def _to_singleton_batch(d):
+                out = {}
+                for k, v in d.items():
+                    if isinstance(v, torch.Tensor):
+                        if v.dim() == 1:                # [seq] -> [1, seq]
+                            out[k] = v.unsqueeze(0)
+                        elif v.dim() >= 2:
+                            out[k] = v[:1]             # [B, ...] -> [1, ...]
+                        else:
+                            out[k] = v
+                    else:
+                        out[k] = v
+                return out
+
+            inputs = _to_singleton_batch(inputs)
+
+            # Final assert: crash early with clear log if still batched
+            _iid = inputs.get("input_ids", None)
+            if isinstance(_iid, torch.Tensor) and _iid.dim() >= 2 and _iid.size(0) != 1:
+                _shapes = {k: tuple(v.shape) for k, v in inputs.items() if isinstance(v, torch.Tensor)}
+                logger.error(f"Input still batched after normalization: shapes={_shapes}")
+                raise ValueError("SingletonBatchEnforceFailed: input_ids batch dimension != 1")
 
             # IMPORTANT: with device_map="auto", let HF move tensors as needed.
             # If you are *not* using device_map="auto", uncomment the line below:
@@ -267,6 +283,8 @@ class HFStreamingSummarizer:
             }
             # Streamer requires single sequence
             gen_kwargs["num_return_sequences"] = 1
+            # Optional safety: disallow beams > 1 with streamer
+            gen_kwargs.pop("num_beams", None)
             
             generation_thread = threading.Thread(target=self.model.generate, kwargs=gen_kwargs, daemon=True)
             generation_thread.start()
