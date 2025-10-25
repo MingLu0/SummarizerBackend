@@ -35,8 +35,8 @@ class TestSummarizeRequest:
         with pytest.raises(ValidationError) as exc_info:
             SummarizeRequest(text="")
         
-        # Check that validation error occurs (Pydantic v1 uses different error messages)
-        assert "ensure this value has at least 1 characters" in str(exc_info.value)
+        # Check that validation error occurs (Pydantic v2 uses different error messages)
+        assert "String should have at least 1 character" in str(exc_info.value)
     
     def test_whitespace_only_text_validation(self):
         """Test validation of whitespace-only text."""

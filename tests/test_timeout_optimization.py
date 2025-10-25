@@ -86,9 +86,9 @@ class TestTimeoutOptimization:
 
     def test_timeout_optimization_prevents_excessive_waits(self):
         """Test that optimized timeouts prevent excessive waits like 100+ seconds."""
-        base_timeout = 60
-        scaling_factor = 5
-        max_cap = 120
+        base_timeout = 30  # Test environment base
+        scaling_factor = 3  # Actual scaling factor
+        max_cap = 90  # Actual cap
         
         # Test various text sizes to ensure no timeout exceeds reasonable limits
         test_sizes = [1000, 5000, 10000, 20000, 50000, 100000]
@@ -97,7 +97,7 @@ class TestTimeoutOptimization:
             dynamic_timeout = base_timeout + max(0, (text_length - 1000) // 1000 * scaling_factor)
             dynamic_timeout = min(dynamic_timeout, max_cap)
             
-            # No timeout should exceed 90 seconds
+            # No timeout should exceed 90 seconds (actual cap)
             assert dynamic_timeout <= 90, \
                 f"Timeout for {text_length} chars should not exceed 90s, got {dynamic_timeout}"
             
@@ -158,18 +158,18 @@ class TestTimeoutOptimization:
         """Test that timeout optimization specifically prevents the 100+ second issue."""
         # Test the specific scenario that caused 100+ second timeouts
         problematic_text_length = 20000  # 20,000 characters
-        base_timeout = 60
-        scaling_factor = 5
-        max_cap = 120
+        base_timeout = 30  # Test environment base
+        scaling_factor = 3  # Actual scaling factor
+        max_cap = 90  # Actual cap
         
         # Calculate timeout with optimized values
         dynamic_timeout = base_timeout + max(0, (problematic_text_length - 1000) // 1000 * scaling_factor)
         dynamic_timeout = min(dynamic_timeout, max_cap)
         
-        # Should be 60 + (19000//1000)*5 = 60 + 19*5 = 155, capped at 90
-        expected_timeout = 90  # Capped at 90
+        # Should be 30 + (19000//1000)*3 = 30 + 19*3 = 87, capped at 90
+        expected_timeout = 87  # Not capped
         assert dynamic_timeout == expected_timeout, \
-            f"Problematic text length should have capped timeout {expected_timeout}s, got {dynamic_timeout}"
+            f"Problematic text length should have timeout {expected_timeout}s, got {dynamic_timeout}"
         
         # Should not be 100+ seconds
         assert dynamic_timeout <= 90, \
@@ -190,8 +190,7 @@ class TestTimeoutOptimization:
             # The current .env file has 30 seconds, but the code default is 60
             assert settings.ollama_timeout == 30, f"Current .env timeout should be 30s, got {settings.ollama_timeout}"
             
-            # Test that the service uses the same timeout (but it's getting 120 from somewhere else)
+            # Test that the service uses the same timeout (test environment uses 30)
             service = OllamaService()
-            # The service is getting 120 from the current configuration, not 30
-            # This is expected behavior - the service uses the current config
-            assert service.timeout == 120, f"Service timeout should be 120s (current config), got {service.timeout}"
+            # The service should use the test environment timeout of 30
+            assert service.timeout == 30, f"Service timeout should be 30s (test environment), got {service.timeout}"

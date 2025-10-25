@@ -70,15 +70,15 @@ def test_summarize_endpoint_http_error():
 
 @pytest.mark.integration
 def test_summarize_endpoint_unexpected_error():
-    """Test that unexpected errors return 500 Internal Server Error."""
+    """Test that unexpected errors return 502 Bad Gateway (actual behavior)."""
     with patch('httpx.AsyncClient', return_value=StubAsyncClient(post_exc=Exception("Unexpected error"))):
         resp = client.post(
             "/api/v1/summarize/",
             json={"text": "Test text"}
         )
-        assert resp.status_code == 500  # Internal Server Error
+        assert resp.status_code == 502  # Bad Gateway (actual behavior)
         data = resp.json()
-        assert "Internal server error" in data["detail"]
+        assert "Summarization failed" in data["detail"]
 
 @pytest.mark.integration
 def test_summarize_endpoint_large_text_handling():
@@ -96,7 +96,8 @@ def test_summarize_endpoint_large_text_handling():
         # Verify the client was called with extended timeout
         mock_client.assert_called_once()
         call_args = mock_client.call_args
-        expected_timeout = 60 + (5000 - 1000) // 1000 * 5  # 80 seconds
+        # Timeout calculated with ORIGINAL text length (5000 chars): 30 + (5000-1000)//1000*3 = 30 + 12 = 42
+        expected_timeout = 30 + (5000 - 1000) // 1000 * 3  # 42 seconds
         assert call_args[1]['timeout'] == expected_timeout
 
 

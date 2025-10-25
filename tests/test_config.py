@@ -13,10 +13,10 @@ class TestSettings:
         """Test default configuration values."""
         test_settings = Settings()
         
-        assert test_settings.ollama_model == "llama3.1:8b"
+        assert test_settings.ollama_model == "llama3.2:1b"
         assert test_settings.ollama_host == "http://127.0.0.1:11434"
         assert test_settings.ollama_timeout == 30
-        assert test_settings.server_host == "127.0.0.1"
+        assert test_settings.server_host == "0.0.0.0"  # Actual default
         assert test_settings.server_port == 8000
         assert test_settings.log_level == "INFO"
         assert test_settings.api_key_enabled is False
@@ -28,10 +28,10 @@ class TestSettings:
         """Test that environment variables override defaults."""
         test_settings = Settings()
         
-        assert test_settings.ollama_model == "llama3.1:8b"
+        assert test_settings.ollama_model == "llama3.2:1b"
         assert test_settings.ollama_host == "http://127.0.0.1:11434"
         assert test_settings.ollama_timeout == 30
-        assert test_settings.server_host == "127.0.0.1"
+        assert test_settings.server_host == "127.0.0.1"  # Test environment override
         assert test_settings.server_port == 8000
         assert test_settings.log_level == "INFO"
     

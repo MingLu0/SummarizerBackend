@@ -85,7 +85,7 @@ def very_long_text() -> str:
 @pytest.fixture
 def test_env_vars(monkeypatch):
     """Set test environment variables."""
-    monkeypatch.setenv("OLLAMA_MODEL", "llama3.1:8b")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2:1b")
     monkeypatch.setenv("OLLAMA_HOST", "http://127.0.0.1:11434")
     monkeypatch.setenv("OLLAMA_TIMEOUT", "30")
     monkeypatch.setenv("SERVER_HOST", "127.0.0.1")
