@@ -172,7 +172,7 @@ class HFStreamingSummarizer:
             temperature = temperature or settings.hf_temperature
             top_p = top_p or settings.hf_top_p
             
-            # --- Build tokenized inputs robustly ---
+            # Build tokenized inputs (normalize return types across tokenizers)
             if "t5" in settings.hf_model_id.lower():
                 full_prompt = f"summarize: {text}"
                 inputs_raw = self.tokenizer(full_prompt, return_tensors="pt", max_length=512, truncation=True)
@@ -181,31 +181,58 @@ class HFStreamingSummarizer:
             else:
                 messages = [
                     {"role": "system", "content": prompt},
-                    {"role": "user", "content": text},
+                    {"role": "user", "content": text}
                 ]
+                
                 if hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template:
                     inputs_raw = self.tokenizer.apply_chat_template(
-                        messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+                        messages, 
+                        tokenize=True, 
+                        add_generation_prompt=True, 
+                        return_tensors="pt"
                     )
                 else:
                     full_prompt = f"{prompt}\n\n{text}"
                     inputs_raw = self.tokenizer(full_prompt, return_tensors="pt")
 
-            # Normalize to dict regardless of tokenizer return type
+            # Normalize to dict regardless of return type
             if isinstance(inputs_raw, dict):
                 inputs = inputs_raw
             else:
                 inputs = {"input_ids": inputs_raw}
 
-            # Move to model device
-            inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+            # Ensure attention_mask (some tokenizers/models don't return it by default)
+            if "attention_mask" not in inputs and "input_ids" in inputs:
+                import torch
+                inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
 
-            # Enforce batch size == 1 for streamer safety
+            # Enforce batch size == 1 for streamer
             for k, v in list(inputs.items()):
-                if v.dim() == 1:
-                    inputs[k] = v.unsqueeze(0)      # [seq] -> [1, seq]
-                elif v.dim() >= 2 and v.size(0) > 1:
-                    inputs[k] = v[:1]               # [B, ...] -> [1, ...]
+                if hasattr(v, "dim"):
+                    if v.dim() == 1:
+                        inputs[k] = v.unsqueeze(0)          # [seq] -> [1, seq]
+                    elif v.dim() >= 2 and v.size(0) > 1:
+                        inputs[k] = v[:1]                   # [B, ...] -> [1, ...]
+
+            # IMPORTANT: with device_map="auto", let HF move tensors as needed.
+            # If you are *not* using device_map="auto", uncomment the line below:
+            # inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+
+            # Validate pad/eos ids
+            pad_id = self.tokenizer.pad_token_id
+            eos_id = self.tokenizer.eos_token_id
+            if pad_id is None and eos_id is not None:
+                pad_id = eos_id
+            elif pad_id is None and eos_id is None:
+                # Last resort: set pad to 0 to avoid None in generate()
+                pad_id = 0
+
+            # Helpful debug: log shapes once
+            try:
+                _shapes = {k: tuple(v.shape) for k, v in inputs.items() if hasattr(v, "shape")}
+                logger.debug(f"HF V2 inputs shapes: {_shapes}, pad_id={pad_id}, eos_id={eos_id}")
+            except Exception:
+                pass
             
             # Create streamer for token-by-token output
             streamer = TextIteratorStreamer(
@@ -214,7 +241,6 @@ class HFStreamingSummarizer:
                 skip_special_tokens=True
             )
             
-            # Generation parameters - T5 models use different parameters
             gen_kwargs = {
                 **inputs,
                 "streamer": streamer,
@@ -222,16 +248,13 @@ class HFStreamingSummarizer:
                 "do_sample": True,
                 "temperature": temperature,
                 "top_p": top_p,
-                "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+                "pad_token_id": pad_id,
+                "eos_token_id": eos_id,
             }
-            # Streamer only supports a single sequence
+            # Streamer requires single sequence
             gen_kwargs["num_return_sequences"] = 1
             
-            # Run generation in background thread
-            generation_thread = threading.Thread(
-                target=self.model.generate, 
-                kwargs=gen_kwargs
-            )
+            generation_thread = threading.Thread(target=self.model.generate, kwargs=gen_kwargs, daemon=True)
             generation_thread.start()
             
             # Stream tokens as they arrive
@@ -262,13 +285,14 @@ class HFStreamingSummarizer:
             
             logger.info(f"✅ HuggingFace summarization completed in {latency_ms:.2f}ms")
             
-        except Exception as e:
-            logger.error(f"❌ HuggingFace summarization failed: {e}")
+        except Exception:
+            # Capture full traceback to aid debugging (the message may be empty otherwise)
+            logger.exception("❌ HuggingFace summarization failed with an exception")
             # Yield error chunk
             yield {
                 "content": "",
                 "done": True,
-                "error": str(e),
+                "error": "HF summarization failed. See server logs for traceback.",
             }
 
     async def check_health(self) -> bool:
