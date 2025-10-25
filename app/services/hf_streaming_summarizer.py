@@ -59,6 +59,7 @@ class HFStreamingSummarizer:
             self.model.eval()
             
             logger.info("✅ HuggingFace model initialized successfully")
+            logger.info(f"   Model ID: {settings.hf_model_id}")
             logger.info(f"   Model device: {next(self.model.parameters()).device}")
             logger.info(f"   Torch dtype: {next(self.model.parameters()).dtype}")
             
@@ -165,7 +166,7 @@ class HFStreamingSummarizer:
         start_time = time.time()
         text_length = len(text)
         
-        logger.info(f"Processing text of {text_length} chars with HuggingFace model")
+        logger.info(f"Processing text of {text_length} chars with HuggingFace model: {settings.hf_model_id}")
         
         try:
             # Use provided parameters or defaults
@@ -323,7 +324,7 @@ class HFStreamingSummarizer:
                 "latency_ms": round(latency_ms, 2),
             }
             
-            logger.info(f"✅ HuggingFace summarization completed in {latency_ms:.2f}ms")
+            logger.info(f"✅ HuggingFace summarization completed in {latency_ms:.2f}ms using model: {settings.hf_model_id}")
             
         except Exception:
             # Capture full traceback to aid debugging (the message may be empty otherwise)
