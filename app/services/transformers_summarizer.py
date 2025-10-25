@@ -3,13 +3,19 @@ Transformers service for fast text summarization using Hugging Face models.
 """
 import asyncio
 import time
-from typing import Dict, Any, AsyncGenerator
-
-from transformers import pipeline
+from typing import Dict, Any, AsyncGenerator, Optional
 
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# Try to import transformers, but make it optional
+try:
+    from transformers import pipeline
+    TRANSFORMERS_AVAILABLE = True
+except ImportError:
+    TRANSFORMERS_AVAILABLE = False
+    logger.warning("Transformers library not available. Pipeline endpoint will be disabled.")
 
 
 class TransformersSummarizer:
@@ -17,6 +23,12 @@ class TransformersSummarizer:
 
     def __init__(self):
         """Initialize the Transformers pipeline with distilbart model."""
+        self.summarizer: Optional[Any] = None
+        
+        if not TRANSFORMERS_AVAILABLE:
+            logger.warning("⚠️ Transformers not available - pipeline endpoint will not work")
+            return
+            
         logger.info("Initializing Transformers pipeline...")
         
         try:
@@ -28,13 +40,17 @@ class TransformersSummarizer:
             logger.info("✅ Transformers pipeline initialized successfully")
         except Exception as e:
             logger.error(f"❌ Failed to initialize Transformers pipeline: {e}")
-            raise
+            self.summarizer = None
 
     async def warm_up_model(self) -> None:
         """
         Warm up the model with a test input to load weights into memory.
         This speeds up subsequent requests.
         """
+        if not self.summarizer:
+            logger.warning("⚠️ Transformers pipeline not initialized, skipping warmup")
+            return
+            
         test_text = "This is a test text to warm up the model."
         
         try:
@@ -50,7 +66,7 @@ class TransformersSummarizer:
             logger.info("✅ Transformers model warmup successful")
         except Exception as e:
             logger.error(f"❌ Transformers model warmup failed: {e}")
-            raise
+            # Don't raise - allow app to start even if warmup fails
 
     async def summarize_text_stream(
         self,
@@ -69,6 +85,16 @@ class TransformersSummarizer:
         Yields:
             Dict containing 'content' (word chunk) and 'done' (completion flag)
         """
+        if not self.summarizer:
+            error_msg = "Transformers pipeline not available. Please install transformers and torch."
+            logger.error(f"❌ {error_msg}")
+            yield {
+                "content": "",
+                "done": True,
+                "error": error_msg,
+            }
+            return
+            
         start_time = time.time()
         text_length = len(text)
         
