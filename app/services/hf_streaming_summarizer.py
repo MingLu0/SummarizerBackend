@@ -281,10 +281,18 @@ class HFStreamingSummarizer:
                 "pad_token_id": pad_id,
                 "eos_token_id": eos_id,
             }
-            # Streamer requires single sequence
+            # Streamer requires a single sequence and no internal beam expansion
             gen_kwargs["num_return_sequences"] = 1
-            # Optional safety: disallow beams > 1 with streamer
-            gen_kwargs.pop("num_beams", None)
+            gen_kwargs["num_beams"] = 1
+            gen_kwargs["num_beam_groups"] = 1
+            # Extra safety: remove any stray args that imply multiple sequences
+            for k in ("num_beam_groups", "num_beams", "num_return_sequences"):
+                # Reassert values in case something upstream re-injected them
+                if k in gen_kwargs and gen_kwargs[k] != 1:
+                    gen_kwargs[k] = 1
+            # Also guard against grouped beam search leftovers
+            gen_kwargs.pop("diversity_penalty", None)
+            gen_kwargs.pop("num_return_sequences_per_prompt", None)
             
             generation_thread = threading.Thread(target=self.model.generate, kwargs=gen_kwargs, daemon=True)
             generation_thread.start()
