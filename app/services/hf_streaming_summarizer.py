@@ -339,7 +339,7 @@ class HFStreamingSummarizer:
             generation_thread.start()
             
             # Stream tokens as they arrive
-            token_count = 0
+            token_count =0 
             for text_chunk in streamer:
                 if text_chunk:  # Skip empty chunks
                     yield {
@@ -350,7 +350,7 @@ class HFStreamingSummarizer:
                     token_count += 1
                     
                     # Small delay for streaming effect
-                    await asyncio.sleep(0.01)
+                    # await asyncio.sleep(0.01)
             
             # Wait for generation to complete
             generation_thread.join()
