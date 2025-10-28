@@ -15,7 +15,7 @@ class TestSummarizeRequest:
         
         assert request.text == sample_text.strip()
         assert request.max_tokens == 256
-        assert request.prompt == "Summarize the following text concisely:"
+        assert request.prompt == "Summarize the key points concisely:"
     
     def test_custom_parameters(self):
         """Test request with custom parameters."""
@@ -73,6 +73,57 @@ class TestSummarizeRequest:
         long_prompt = "x" * 501
         with pytest.raises(ValidationError):
             SummarizeRequest(text="test", prompt=long_prompt)
+    
+    def test_temperature_parameter(self):
+        """Test temperature parameter validation."""
+        # Valid temperature values
+        request = SummarizeRequest(text="test", temperature=0.0)
+        assert request.temperature == 0.0
+        
+        request = SummarizeRequest(text="test", temperature=2.0)
+        assert request.temperature == 2.0
+        
+        request = SummarizeRequest(text="test", temperature=0.3)
+        assert request.temperature == 0.3
+        
+        # Default temperature
+        request = SummarizeRequest(text="test")
+        assert request.temperature == 0.3
+        
+        # Invalid temperature values
+        with pytest.raises(ValidationError):
+            SummarizeRequest(text="test", temperature=-0.1)
+        
+        with pytest.raises(ValidationError):
+            SummarizeRequest(text="test", temperature=2.1)
+    
+    def test_top_p_parameter(self):
+        """Test top_p parameter validation."""
+        # Valid top_p values
+        request = SummarizeRequest(text="test", top_p=0.0)
+        assert request.top_p == 0.0
+        
+        request = SummarizeRequest(text="test", top_p=1.0)
+        assert request.top_p == 1.0
+        
+        request = SummarizeRequest(text="test", top_p=0.9)
+        assert request.top_p == 0.9
+        
+        # Default top_p
+        request = SummarizeRequest(text="test")
+        assert request.top_p == 0.9
+        
+        # Invalid top_p values
+        with pytest.raises(ValidationError):
+            SummarizeRequest(text="test", top_p=-0.1)
+        
+        with pytest.raises(ValidationError):
+            SummarizeRequest(text="test", top_p=1.1)
+    
+    def test_updated_default_prompt(self):
+        """Test that the default prompt has been updated to be more concise."""
+        request = SummarizeRequest(text="test")
+        assert request.prompt == "Summarize the key points concisely:"
 
 
 class TestSummarizeResponse:

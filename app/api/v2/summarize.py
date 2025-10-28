@@ -27,12 +27,28 @@ async def summarize_stream(payload: SummarizeRequest):
 async def _stream_generator(payload: SummarizeRequest):
     """Generator function for streaming SSE responses using HuggingFace."""
     try:
+        # Calculate adaptive max_new_tokens based on text length
+        text_length = len(payload.text)
+        if text_length < 1500:
+            # Short texts: use 60-100 tokens
+            adaptive_max_tokens = min(100, max(60, text_length // 15))
+        else:
+            # Longer texts: scale proportionally but cap appropriately
+            adaptive_max_tokens = min(400, max(100, text_length // 20))
+        
+        # Use adaptive calculation by default, but allow user override
+        # Check if max_tokens was explicitly provided (not just the default 256)
+        if hasattr(payload, 'model_fields_set') and 'max_tokens' in payload.model_fields_set:
+            max_new_tokens = payload.max_tokens
+        else:
+            max_new_tokens = adaptive_max_tokens
+        
         async for chunk in hf_streaming_service.summarize_text_stream(
             text=payload.text,
-            max_new_tokens=payload.max_tokens or 128,  # Map max_tokens to max_new_tokens
-            temperature=0.7,  # Use default temperature
-            top_p=0.95,  # Use default top_p
-            prompt=payload.prompt or "Provide a comprehensive summary of the following text, including main arguments, key findings, important details, and specific examples. Structure your response clearly:",
+            max_new_tokens=max_new_tokens,
+            temperature=payload.temperature,  # Use user-provided temperature
+            top_p=payload.top_p,  # Use user-provided top_p
+            prompt=payload.prompt,
         ):
             # Format as SSE event (same format as V1)
             sse_data = json.dumps(chunk)

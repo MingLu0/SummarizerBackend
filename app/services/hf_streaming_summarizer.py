@@ -164,7 +164,7 @@ class HFStreamingSummarizer:
         max_new_tokens: int = None,
         temperature: float = None,
         top_p: float = None,
-        prompt: str = "Provide a comprehensive summary of the following text, including main arguments, key findings, important details, and specific examples. Structure your response clearly:",
+        prompt: str = "Summarize the key points concisely:",
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Stream text summarization using HuggingFace's TextIteratorStreamer.
@@ -194,13 +194,19 @@ class HFStreamingSummarizer:
         
         logger.info(f"Processing text of {text_length} chars with HuggingFace model: {settings.hf_model_id}")
         
+        # Check if text is long enough to require recursive summarization
+        if text_length > 1500:
+            logger.info(f"Text is long ({text_length} chars), using recursive summarization")
+            async for chunk in self._recursive_summarize(text, max_new_tokens, temperature, top_p, prompt):
+                yield chunk
+            return
+        
         try:
             # Use provided parameters or sensible defaults
-            # Aim for ~200–400 tokens summary by default.
-            # If settings.hf_max_new_tokens is small, override with 256.
-            max_new_tokens = max_new_tokens or max(getattr(settings, "hf_max_new_tokens", 0) or 0, 256)
-            temperature = temperature or settings.hf_temperature
-            top_p = top_p or settings.hf_top_p
+            # For short texts, aim for concise summaries (60-100 tokens)
+            max_new_tokens = max_new_tokens or max(getattr(settings, "hf_max_new_tokens", 0) or 0, 80)
+            temperature = temperature or getattr(settings, "hf_temperature", 0.3)
+            top_p = top_p or getattr(settings, "hf_top_p", 0.9)
             
             # Determine a generous encoder max length (respect tokenizer.model_max_length)
             model_max = getattr(self.tokenizer, "model_max_length", 1024)
@@ -319,10 +325,10 @@ class HFStreamingSummarizer:
             gen_kwargs["num_return_sequences"] = 1
             gen_kwargs["num_beams"] = 1
             gen_kwargs["num_beam_groups"] = 1
-            # Ensure we don't stop too early; set a floor and slightly favor longer generations
-            gen_kwargs["min_new_tokens"] = max(96, min(192, max_new_tokens // 2))  # floor ~100–192
-            # length_penalty > 1.0 encourages longer outputs on encoder-decoder models
-            gen_kwargs["length_penalty"] = 1.1
+            # Set conservative min_new_tokens to prevent rambling
+            gen_kwargs["min_new_tokens"] = max(20, min(50, max_new_tokens // 4))  # floor ~20-50
+            # Use neutral length_penalty to avoid encouraging longer outputs
+            gen_kwargs["length_penalty"] = 1.0
             # Reduce premature EOS in some checkpoints (optional)
             gen_kwargs["no_repeat_ngram_size"] = 3
             gen_kwargs["repetition_penalty"] = 1.05
@@ -374,6 +380,217 @@ class HFStreamingSummarizer:
                 "content": "",
                 "done": True,
                 "error": "HF summarization failed. See server logs for traceback.",
+            }
+
+    async def _recursive_summarize(
+        self,
+        text: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        prompt: str,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Recursively summarize long text by chunking and summarizing each chunk,
+        then summarizing the summaries if there are multiple chunks.
+        """
+        try:
+            # Split text into chunks of ~800-1000 tokens
+            chunks = _split_into_chunks(text, chunk_chars=4000, overlap=400)
+            logger.info(f"Split long text into {len(chunks)} chunks for recursive summarization")
+            
+            chunk_summaries = []
+            
+            # Summarize each chunk
+            for i, chunk in enumerate(chunks):
+                logger.info(f"Summarizing chunk {i+1}/{len(chunks)}")
+                
+                # Use smaller max_new_tokens for individual chunks
+                chunk_max_tokens = min(max_new_tokens, 80)
+                
+                chunk_summary = ""
+                async for chunk_result in self._single_chunk_summarize(
+                    chunk, chunk_max_tokens, temperature, top_p, prompt
+                ):
+                    if chunk_result.get("content"):
+                        chunk_summary += chunk_result["content"]
+                    yield chunk_result  # Stream each chunk's summary
+                
+                chunk_summaries.append(chunk_summary.strip())
+            
+            # If we have multiple chunks, create a final summary of summaries
+            if len(chunk_summaries) > 1:
+                logger.info("Creating final summary of summaries")
+                combined_summaries = "\n\n".join(chunk_summaries)
+                
+                # Use original max_new_tokens for final summary
+                async for final_result in self._single_chunk_summarize(
+                    combined_summaries, max_new_tokens, temperature, top_p, 
+                    "Summarize the key points from these summaries:"
+                ):
+                    yield final_result
+            else:
+                # Single chunk, just yield the done signal
+                yield {
+                    "content": "",
+                    "done": True,
+                    "tokens_used": 0,
+                }
+                
+        except Exception as e:
+            logger.exception("❌ Recursive summarization failed")
+            yield {
+                "content": "",
+                "done": True,
+                "error": f"Recursive summarization failed: {str(e)}",
+            }
+
+    async def _single_chunk_summarize(
+        self,
+        text: str,
+        max_new_tokens: int,
+        temperature: float,
+        top_p: float,
+        prompt: str,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Summarize a single chunk of text using the same logic as the main method
+        but without the recursive check.
+        """
+        if not self.model or not self.tokenizer:
+            error_msg = "HuggingFace model not available. Please check model initialization."
+            logger.error(f"❌ {error_msg}")
+            yield {
+                "content": "",
+                "done": True,
+                "error": error_msg,
+            }
+            return
+            
+        try:
+            # Use provided parameters or sensible defaults
+            max_new_tokens = max_new_tokens or 80
+            temperature = temperature or 0.3
+            top_p = top_p or 0.9
+            
+            # Determine encoder max length
+            model_max = getattr(self.tokenizer, "model_max_length", 1024)
+            if not isinstance(model_max, int) or model_max <= 0:
+                model_max = 1024
+            enc_max_len = min(model_max, 2048)
+            
+            # Build tokenized inputs
+            if "t5" in settings.hf_model_id.lower():
+                full_prompt = f"summarize: {text}"
+                inputs_raw = self.tokenizer(full_prompt, return_tensors="pt", max_length=enc_max_len, truncation=True)
+            elif "bart" in settings.hf_model_id.lower():
+                inputs_raw = self.tokenizer(text, return_tensors="pt", max_length=enc_max_len, truncation=True)
+            else:
+                messages = [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": text}
+                ]
+                
+                if hasattr(self.tokenizer, "apply_chat_template") and self.tokenizer.chat_template:
+                    inputs_raw = self.tokenizer.apply_chat_template(
+                        messages, tokenize=True, add_generation_prompt=True, return_tensors="pt"
+                    )
+                else:
+                    full_prompt = f"{prompt}\n\n{text}"
+                    inputs_raw = self.tokenizer(full_prompt, return_tensors="pt")
+
+            # Normalize inputs (same logic as main method)
+            if isinstance(inputs_raw, (dict, BatchEncoding)):
+                try:
+                    inputs = dict(inputs_raw)
+                except Exception:
+                    inputs = dict(getattr(inputs_raw, "data", {}))
+            else:
+                inputs = {"input_ids": inputs_raw}
+
+            if "attention_mask" not in inputs and "input_ids" in inputs:
+                if TRANSFORMERS_AVAILABLE and 'torch' in globals() and isinstance(inputs["input_ids"], torch.Tensor):
+                    inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
+
+            def _to_singleton_batch(d):
+                out = {}
+                for k, v in d.items():
+                    if TRANSFORMERS_AVAILABLE and 'torch' in globals() and isinstance(v, torch.Tensor):
+                        if v.dim() == 1:
+                            out[k] = v.unsqueeze(0)
+                        elif v.dim() >= 2:
+                            out[k] = v[:1]
+                        else:
+                            out[k] = v
+                    else:
+                        out[k] = v
+                return out
+
+            inputs = _to_singleton_batch(inputs)
+
+            # Validate pad/eos ids
+            pad_id = self.tokenizer.pad_token_id
+            eos_id = self.tokenizer.eos_token_id
+            if pad_id is None and eos_id is not None:
+                pad_id = eos_id
+            elif pad_id is None and eos_id is None:
+                pad_id = 0
+            
+            # Create streamer
+            streamer = TextIteratorStreamer(
+                self.tokenizer, 
+                skip_prompt=True, 
+                skip_special_tokens=True
+            )
+            
+            gen_kwargs = {
+                **inputs,
+                "streamer": streamer,
+                "max_new_tokens": max_new_tokens,
+                "do_sample": True,
+                "temperature": temperature,
+                "top_p": top_p,
+                "pad_token_id": pad_id,
+                "eos_token_id": eos_id,
+                "num_return_sequences": 1,
+                "num_beams": 1,
+                "num_beam_groups": 1,
+                "min_new_tokens": max(20, min(50, max_new_tokens // 4)),
+                "length_penalty": 1.0,
+                "no_repeat_ngram_size": 3,
+                "repetition_penalty": 1.05,
+            }
+            
+            generation_thread = threading.Thread(target=self.model.generate, kwargs=gen_kwargs, daemon=True)
+            generation_thread.start()
+            
+            # Stream tokens as they arrive
+            token_count = 0
+            for text_chunk in streamer:
+                if text_chunk:
+                    yield {
+                        "content": text_chunk,
+                        "done": False,
+                        "tokens_used": token_count,
+                    }
+                    token_count += 1
+            
+            # Wait for generation to complete
+            generation_thread.join()
+            
+            # Send final "done" chunk
+            yield {
+                "content": "",
+                "done": True,
+                "tokens_used": token_count,
+            }
+            
+        except Exception:
+            logger.exception("❌ Single chunk summarization failed")
+            yield {
+                "content": "",
+                "done": True,
+                "error": "Single chunk summarization failed. See server logs for traceback.",
             }
 
     async def check_health(self) -> bool:

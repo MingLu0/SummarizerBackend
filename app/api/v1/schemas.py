@@ -10,8 +10,10 @@ class SummarizeRequest(BaseModel):
     
     text: str = Field(..., min_length=1, max_length=32000, description="Text to summarize")
     max_tokens: Optional[int] = Field(default=256, ge=1, le=2048, description="Maximum tokens for summary")
+    temperature: Optional[float] = Field(default=0.3, ge=0.0, le=2.0, description="Sampling temperature for generation")
+    top_p: Optional[float] = Field(default=0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter")
     prompt: Optional[str] = Field(
-        default="Provide a comprehensive summary of the following text, including main arguments, key findings, important details, and specific examples. Structure your response clearly:",
+        default="Summarize the key points concisely:",
         max_length=500,
         description="Custom prompt for summarization"
     )

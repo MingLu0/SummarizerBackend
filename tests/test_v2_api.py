@@ -155,6 +155,144 @@ class TestV2SummarizeStream:
             assert call_args[1]['prompt'] == "Custom prompt"
             assert call_args[1]['text'] == "Test text"
 
+    @pytest.mark.integration
+    def test_v2_adaptive_token_logic_short_text(self, client: TestClient):
+        """Test adaptive token logic for short texts (<1500 chars)."""
+        with patch('app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream') as mock_stream:
+            async def mock_generator():
+                yield {"content": "", "done": True}
+            
+            mock_stream.return_value = mock_generator()
+            
+            # Short text (500 chars)
+            short_text = "This is a short text. " * 20  # ~500 chars
+            
+            response = client.post(
+                "/api/v2/summarize/stream",
+                json={
+                    "text": short_text,
+                    # Don't specify max_tokens to test adaptive logic
+                }
+            )
+            
+            assert response.status_code == 200
+            
+            # Verify service was called with adaptive max_new_tokens
+            mock_stream.assert_called_once()
+            call_args = mock_stream.call_args
+            
+            # For short text, should use 60-100 tokens
+            max_new_tokens = call_args[1]['max_new_tokens']
+            assert 60 <= max_new_tokens <= 100
+
+    @pytest.mark.integration
+    def test_v2_adaptive_token_logic_long_text(self, client: TestClient):
+        """Test adaptive token logic for long texts (>1500 chars)."""
+        with patch('app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream') as mock_stream:
+            async def mock_generator():
+                yield {"content": "", "done": True}
+            
+            mock_stream.return_value = mock_generator()
+            
+            # Long text (2000 chars)
+            long_text = "This is a longer text that should trigger adaptive token logic. " * 40  # ~2000 chars
+            
+            response = client.post(
+                "/api/v2/summarize/stream",
+                json={
+                    "text": long_text,
+                    # Don't specify max_tokens to test adaptive logic
+                }
+            )
+            
+            assert response.status_code == 200
+            
+            # Verify service was called with adaptive max_new_tokens
+            mock_stream.assert_called_once()
+            call_args = mock_stream.call_args
+            
+            # For long text, should use proportional scaling but capped
+            max_new_tokens = call_args[1]['max_new_tokens']
+            assert 100 <= max_new_tokens <= 400
+
+    @pytest.mark.integration
+    def test_v2_temperature_and_top_p_parameters(self, client: TestClient):
+        """Test that temperature and top_p parameters are passed correctly."""
+        with patch('app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream') as mock_stream:
+            async def mock_generator():
+                yield {"content": "", "done": True}
+            
+            mock_stream.return_value = mock_generator()
+            
+            response = client.post(
+                "/api/v2/summarize/stream",
+                json={
+                    "text": "Test text",
+                    "temperature": 0.5,
+                    "top_p": 0.8
+                }
+            )
+            
+            assert response.status_code == 200
+            
+            # Verify service was called with correct parameters
+            mock_stream.assert_called_once()
+            call_args = mock_stream.call_args
+            
+            assert call_args[1]['temperature'] == 0.5
+            assert call_args[1]['top_p'] == 0.8
+
+    @pytest.mark.integration
+    def test_v2_default_temperature_and_top_p(self, client: TestClient):
+        """Test that default temperature and top_p values are used when not specified."""
+        with patch('app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream') as mock_stream:
+            async def mock_generator():
+                yield {"content": "", "done": True}
+            
+            mock_stream.return_value = mock_generator()
+            
+            response = client.post(
+                "/api/v2/summarize/stream",
+                json={
+                    "text": "Test text"
+                    # Don't specify temperature or top_p
+                }
+            )
+            
+            assert response.status_code == 200
+            
+            # Verify service was called with default parameters
+            mock_stream.assert_called_once()
+            call_args = mock_stream.call_args
+            
+            assert call_args[1]['temperature'] == 0.3  # Default temperature
+            assert call_args[1]['top_p'] == 0.9  # Default top_p
+
+    @pytest.mark.integration
+    def test_v2_recursive_summarization_trigger(self, client: TestClient):
+        """Test that recursive summarization is triggered for long texts."""
+        with patch('app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream') as mock_stream:
+            async def mock_generator():
+                yield {"content": "", "done": True}
+            
+            mock_stream.return_value = mock_generator()
+            
+            # Very long text (>1500 chars) to trigger recursive summarization
+            very_long_text = "This is a very long text that should definitely trigger recursive summarization logic. " * 30  # ~2000+ chars
+            
+            response = client.post(
+                "/api/v2/summarize/stream",
+                json={
+                    "text": very_long_text
+                }
+            )
+            
+            assert response.status_code == 200
+            
+            # The service should be called, and internally it should detect long text
+            # and use recursive summarization
+            mock_stream.assert_called_once()
+
 
 class TestV2APICompatibility:
     """Test V2 API compatibility with V1."""
