@@ -20,6 +20,7 @@ async def summarize_stream(payload: SummarizeRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
         }
     )
 
