@@ -1,7 +1,9 @@
 """
 V2 Summarization endpoints using HuggingFace streaming.
 """
+
 import json
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
@@ -21,7 +23,7 @@ async def summarize_stream(payload: SummarizeRequest):
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",
-        }
+        },
     )
 
 
@@ -36,14 +38,17 @@ async def _stream_generator(payload: SummarizeRequest):
         else:
             # Longer texts: scale proportionally but cap appropriately
             adaptive_max_tokens = min(400, max(100, text_length // 20))
-        
+
         # Use adaptive calculation by default, but allow user override
         # Check if max_tokens was explicitly provided (not just the default 256)
-        if hasattr(payload, 'model_fields_set') and 'max_tokens' in payload.model_fields_set:
+        if (
+            hasattr(payload, "model_fields_set")
+            and "max_tokens" in payload.model_fields_set
+        ):
             max_new_tokens = payload.max_tokens
         else:
             max_new_tokens = adaptive_max_tokens
-        
+
         async for chunk in hf_streaming_service.summarize_text_stream(
             text=payload.text,
             max_new_tokens=max_new_tokens,
@@ -54,13 +59,13 @@ async def _stream_generator(payload: SummarizeRequest):
             # Format as SSE event (same format as V1)
             sse_data = json.dumps(chunk)
             yield f"data: {sse_data}\n\n"
-            
+
     except Exception as e:
         # Send error event in SSE format (same as V1)
         error_chunk = {
             "content": "",
             "done": True,
-            "error": f"HuggingFace summarization failed: {str(e)}"
+            "error": f"HuggingFace summarization failed: {str(e)}",
         }
         sse_data = json.dumps(error_chunk)
         yield f"data: {sse_data}\n\n"

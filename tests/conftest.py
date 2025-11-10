@@ -1,9 +1,11 @@
 """
 Test configuration and fixtures for the text summarizer backend.
 """
-import pytest
+
 import asyncio
 from typing import AsyncGenerator, Generator
+
+import pytest
 from httpx import AsyncClient
 from starlette.testclient import TestClient
 
@@ -65,7 +67,7 @@ def mock_ollama_response() -> dict:
         "prompt_eval_count": 50,
         "prompt_eval_duration": 123456789,
         "eval_count": 20,
-        "eval_duration": 123456789
+        "eval_duration": 123456789,
     }
 
 

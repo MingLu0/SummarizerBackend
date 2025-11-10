@@ -1,9 +1,10 @@
 """
 Ollama service integration for text summarization.
 """
+
 import json
 import time
-from typing import Dict, Any, AsyncGenerator
+from typing import Any, AsyncGenerator, Dict
 from urllib.parse import urljoin
 
 import httpx
@@ -58,16 +59,22 @@ class OllamaService:
 
         # Optimized timeout: base + 3s per extra 1000 chars (cap 90s)
         text_length = len(text)
-        dynamic_timeout = min(self.timeout + max(0, (text_length - 1000) // 1000 * 3), 90)
+        dynamic_timeout = min(
+            self.timeout + max(0, (text_length - 1000) // 1000 * 3), 90
+        )
 
         # Preprocess text to reduce input size for faster processing
         if text_length > 4000:
             # Truncate very long texts and add note
             text = text[:4000] + "\n\n[Text truncated for faster processing]"
             text_length = len(text)
-            logger.info(f"Text truncated from {len(text)} to {text_length} chars for faster processing")
+            logger.info(
+                f"Text truncated from {len(text)} to {text_length} chars for faster processing"
+            )
 
-        logger.info(f"Processing text of {text_length} chars with timeout {dynamic_timeout}s")
+        logger.info(
+            f"Processing text of {text_length} chars with timeout {dynamic_timeout}s"
+        )
 
         full_prompt = f"{prompt}\n\n{text}"
 
@@ -78,10 +85,10 @@ class OllamaService:
             "options": {
                 "num_predict": max_tokens,
                 "temperature": 0.1,  # Lower temperature for faster, more focused output
-                "top_p": 0.9,        # Nucleus sampling for efficiency
-                "top_k": 40,         # Limit vocabulary for speed
+                "top_p": 0.9,  # Nucleus sampling for efficiency
+                "top_k": 40,  # Limit vocabulary for speed
                 "repeat_penalty": 1.1,  # Prevent repetition
-                "num_ctx": 2048,     # Limit context window for speed
+                "num_ctx": 2048,  # Limit context window for speed
             },
         }
 
@@ -139,16 +146,22 @@ class OllamaService:
 
         # Optimized timeout: base + 3s per extra 1000 chars (cap 90s)
         text_length = len(text)
-        dynamic_timeout = min(self.timeout + max(0, (text_length - 1000) // 1000 * 3), 90)
+        dynamic_timeout = min(
+            self.timeout + max(0, (text_length - 1000) // 1000 * 3), 90
+        )
 
         # Preprocess text to reduce input size for faster processing
         if text_length > 4000:
             # Truncate very long texts and add note
             text = text[:4000] + "\n\n[Text truncated for faster processing]"
             text_length = len(text)
-            logger.info(f"Text truncated from {len(text)} to {text_length} chars for faster processing")
+            logger.info(
+                f"Text truncated from {len(text)} to {text_length} chars for faster processing"
+            )
 
-        logger.info(f"Processing text of {text_length} chars with timeout {dynamic_timeout}s")
+        logger.info(
+            f"Processing text of {text_length} chars with timeout {dynamic_timeout}s"
+        )
 
         full_prompt = f"{prompt}\n\n{text}"
 
@@ -159,10 +172,10 @@ class OllamaService:
             "options": {
                 "num_predict": max_tokens,
                 "temperature": 0.1,  # Lower temperature for faster, more focused output
-                "top_p": 0.9,        # Nucleus sampling for efficiency
-                "top_k": 40,         # Limit vocabulary for speed
+                "top_p": 0.9,  # Nucleus sampling for efficiency
+                "top_k": 40,  # Limit vocabulary for speed
                 "repeat_penalty": 1.1,  # Prevent repetition
-                "num_ctx": 2048,     # Limit context window for speed
+                "num_ctx": 2048,  # Limit context window for speed
             },
         }
 
@@ -171,14 +184,16 @@ class OllamaService:
 
         try:
             async with httpx.AsyncClient(timeout=dynamic_timeout) as client:
-                async with client.stream("POST", generate_url, json=payload) as response:
+                async with client.stream(
+                    "POST", generate_url, json=payload
+                ) as response:
                     response.raise_for_status()
-                    
+
                     async for line in response.aiter_lines():
                         line = line.strip()
                         if not line:
                             continue
-                            
+
                         try:
                             data = json.loads(line)
                             chunk = {
@@ -187,14 +202,16 @@ class OllamaService:
                                 "tokens_used": data.get("eval_count", 0),
                             }
                             yield chunk
-                            
+
                             # Break if this is the final chunk
                             if data.get("done", False):
                                 break
-                                
+
                         except json.JSONDecodeError:
                             # Skip malformed JSON lines
-                            logger.warning(f"Skipping malformed JSON line: {line[:100]}")
+                            logger.warning(
+                                f"Skipping malformed JSON line: {line[:100]}"
+                            )
                             continue
 
         except httpx.TimeoutException:
@@ -233,10 +250,10 @@ class OllamaService:
                 "temperature": 0.1,
             },
         }
-        
+
         generate_url = urljoin(self.base_url, "api/generate")
         logger.info(f"POST {generate_url} (warmup)")
-        
+
         try:
             async with httpx.AsyncClient(timeout=60.0) as client:
                 resp = await client.post(generate_url, json=warmup_payload)

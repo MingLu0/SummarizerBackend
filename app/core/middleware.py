@@ -1,14 +1,14 @@
 """
 Custom middlewares for request ID and timing/logging.
 """
+
 import time
 import uuid
 from typing import Callable
 
 from fastapi import Request, Response
 
-from app.core.logging import get_logger, RequestLogger
-
+from app.core.logging import RequestLogger, get_logger
 
 logger = get_logger(__name__)
 request_logger = RequestLogger(logger)
@@ -38,5 +38,3 @@ async def request_context_middleware(request: Request, call_next: Callable) -> R
     # propagate request id header
     response.headers["X-Request-ID"] = request_id
     return response
-
-

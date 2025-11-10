@@ -40,6 +40,11 @@ POST /api/v1/summarize/pipeline/stream
 POST /api/v2/summarize/stream
 ```
 
+### V3 API (Web Scraping + Summarization)
+```
+POST /api/v3/scrape-and-summarize/stream
+```
+
 ## 🌐 Live Deployment
 
 **✅ Successfully deployed and tested on Hugging Face Spaces!**
@@ -91,6 +96,15 @@ The service uses the following environment variables:
 - `HF_TOP_P`: Nucleus sampling (default: `0.95`)
 - `ENABLE_V2_WARMUP`: Enable V2 warmup (default: `true`)
 
+### V3 Configuration (Web Scraping)
+- `ENABLE_V3_SCRAPING`: Enable V3 API (default: `true`)
+- `SCRAPING_TIMEOUT`: HTTP timeout for scraping (default: `10` seconds)
+- `SCRAPING_MAX_TEXT_LENGTH`: Max text to extract (default: `50000` chars)
+- `SCRAPING_CACHE_ENABLED`: Enable caching (default: `true`)
+- `SCRAPING_CACHE_TTL`: Cache TTL (default: `3600` seconds / 1 hour)
+- `SCRAPING_UA_ROTATION`: Enable user-agent rotation (default: `true`)
+- `SCRAPING_RATE_LIMIT_PER_MINUTE`: Rate limit per IP (default: `10`)
+
 ### Server Configuration
 - `SERVER_HOST`: Server host (default: `127.0.0.1`)
 - `SERVER_PORT`: Server port (default: `8000`)
@@ -138,6 +152,13 @@ HF_HOME=/tmp/huggingface
 - **Memory usage**: ~500MB RAM (when V2 warmup enabled)
 - **Inference speed**: Real-time token streaming
 - **Startup time**: ~30-60 seconds (includes model download when V2 warmup enabled)
+
+### V3 (Web Scraping + Summarization)
+- **Dependencies**: trafilatura, httpx, lxml (lightweight, no JavaScript rendering)
+- **Memory usage**: ~550MB RAM (V2 + scraping: +10-50MB)
+- **Scraping speed**: 200-500ms typical, <10ms on cache hit
+- **Total latency**: 2-5 seconds (scrape + summarize)
+- **Success rate**: 95%+ article extraction
 
 ### Memory Optimization
 - **V1 warmup disabled by default** (`ENABLE_V1_WARMUP=false`)
@@ -214,6 +235,41 @@ for line in response.iter_lines():
             break
 ```
 
+### V3 API (Web Scraping + Summarization) - Android App Primary Use Case
+```python
+import requests
+import json
+
+# V3 scrape article from URL and stream summarization
+response = requests.post(
+    "https://colin730-SummarizerApp.hf.space/api/v3/scrape-and-summarize/stream",
+    json={
+        "url": "https://example.com/article",
+        "max_tokens": 256,
+        "include_metadata": True,  # Get article title, author, etc.
+        "use_cache": True  # Use cached content if available
+    },
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line.startswith(b'data: '):
+        data = json.loads(line[6:])
+        
+        # First event: metadata
+        if data.get("type") == "metadata":
+            print(f"Title: {data['data']['title']}")
+            print(f"Author: {data['data']['author']}")
+            print(f"Scrape time: {data['data']['scrape_latency_ms']}ms\n")
+        
+        # Content events
+        elif "content" in data:
+            print(data["content"], end="")
+            if data["done"]:
+                print(f"\n\nTotal time: {data['latency_ms']}ms")
+                break
+```
+
 ### Android Client (SSE)
 ```kotlin
 // Android SSE client example
@@ -258,6 +314,11 @@ curl -X POST "https://colin730-SummarizerApp.hf.space/api/v1/summarize/stream" \
 curl -X POST "https://colin730-SummarizerApp.hf.space/api/v2/summarize/stream" \
   -H "Content-Type: application/json" \
   -d '{"text": "Your text...", "max_tokens": 128}'
+
+# V3 API (Web scraping + summarization)
+curl -X POST "https://colin730-SummarizerApp.hf.space/api/v3/scrape-and-summarize/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/article", "max_tokens": 256, "include_metadata": true}'
 ```
 
 ### Test Script

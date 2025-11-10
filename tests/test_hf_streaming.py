@@ -1,11 +1,14 @@
 """
 Tests for HuggingFace streaming service.
 """
-import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
-import asyncio
 
-from app.services.hf_streaming_summarizer import HFStreamingSummarizer, hf_streaming_service
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.services.hf_streaming_summarizer import (HFStreamingSummarizer,
+                                                  hf_streaming_service)
 
 
 class TestHFStreamingSummarizer:
@@ -13,7 +16,9 @@ class TestHFStreamingSummarizer:
 
     def test_service_initialization_without_transformers(self):
         """Test service initialization when transformers is not available."""
-        with patch('app.services.hf_streaming_summarizer.TRANSFORMERS_AVAILABLE', False):
+        with patch(
+            "app.services.hf_streaming_summarizer.TRANSFORMERS_AVAILABLE", False
+        ):
             service = HFStreamingSummarizer()
             assert service.tokenizer is None
             assert service.model is None
@@ -24,7 +29,7 @@ class TestHFStreamingSummarizer:
         service = HFStreamingSummarizer()
         service.tokenizer = None
         service.model = None
-        
+
         # Should not raise exception
         await service.warm_up_model()
 
@@ -34,7 +39,7 @@ class TestHFStreamingSummarizer:
         service = HFStreamingSummarizer()
         service.tokenizer = None
         service.model = None
-        
+
         result = await service.check_health()
         assert result is False
 
@@ -44,11 +49,11 @@ class TestHFStreamingSummarizer:
         service = HFStreamingSummarizer()
         service.tokenizer = None
         service.model = None
-        
+
         chunks = []
         async for chunk in service.summarize_text_stream("Test text"):
             chunks.append(chunk)
-        
+
         assert len(chunks) == 1
         assert chunks[0]["done"] is True
         assert "error" in chunks[0]
@@ -59,11 +64,11 @@ class TestHFStreamingSummarizer:
         """Test streaming with mocked model - simplified test."""
         # This test just verifies the method exists and handles errors gracefully
         service = HFStreamingSummarizer()
-        
+
         chunks = []
         async for chunk in service.summarize_text_stream("Test text"):
             chunks.append(chunk)
-        
+
         # Should return error chunk when transformers not available
         assert len(chunks) == 1
         assert chunks[0]["done"] is True
@@ -72,21 +77,23 @@ class TestHFStreamingSummarizer:
     @pytest.mark.asyncio
     async def test_summarize_text_stream_error_handling(self):
         """Test error handling in streaming."""
-        with patch('app.services.hf_streaming_summarizer.TRANSFORMERS_AVAILABLE', True):
+        with patch("app.services.hf_streaming_summarizer.TRANSFORMERS_AVAILABLE", True):
             service = HFStreamingSummarizer()
-            
+
             # Mock tokenizer and model
             mock_tokenizer = MagicMock()
-            mock_tokenizer.apply_chat_template.side_effect = Exception("Tokenization failed")
+            mock_tokenizer.apply_chat_template.side_effect = Exception(
+                "Tokenization failed"
+            )
             mock_tokenizer.chat_template = "test template"
-            
+
             service.tokenizer = mock_tokenizer
             service.model = MagicMock()
-            
+
             chunks = []
             async for chunk in service.summarize_text_stream("Test text"):
                 chunks.append(chunk)
-            
+
             # Should return error chunk
             assert len(chunks) == 1
             assert chunks[0]["done"] is True
@@ -96,7 +103,7 @@ class TestHFStreamingSummarizer:
     def test_get_torch_dtype_auto(self):
         """Test torch dtype selection - simplified test."""
         service = HFStreamingSummarizer()
-        
+
         # Test that the method exists and handles the case when torch is not available
         try:
             dtype = service._get_torch_dtype()
@@ -109,7 +116,7 @@ class TestHFStreamingSummarizer:
     def test_get_torch_dtype_float16(self):
         """Test torch dtype selection for float16 - simplified test."""
         service = HFStreamingSummarizer()
-        
+
         # Test that the method exists and handles the case when torch is not available
         try:
             dtype = service._get_torch_dtype()
@@ -123,25 +130,29 @@ class TestHFStreamingSummarizer:
     async def test_streaming_single_batch(self):
         """Test that streaming enforces batch size = 1 and completes successfully."""
         service = HFStreamingSummarizer()
-        
+
         # Skip if model not initialized (transformers not available)
         if not service.model or not service.tokenizer:
             pytest.skip("Transformers not available")
-        
+
         chunks = []
         async for chunk in service.summarize_text_stream(
             text="This is a short test article about New Zealand tech news.",
             max_new_tokens=32,
             temperature=0.7,
             top_p=0.9,
-            prompt="Summarize:"
+            prompt="Summarize:",
         ):
             chunks.append(chunk)
-        
+
         # Should complete without ValueError and have a final done=True
         assert len(chunks) > 0
         assert any(c.get("done") for c in chunks)
-        assert all("error" not in c or c.get("error") is None for c in chunks if not c.get("done"))
+        assert all(
+            "error" not in c or c.get("error") is None
+            for c in chunks
+            if not c.get("done")
+        )
 
 
 class TestHFStreamingServiceIntegration:

@@ -1,10 +1,13 @@
 """
 Summarization endpoints.
 """
+
 import json
+
+import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-import httpx
+
 from app.api.v1.schemas import SummarizeRequest, SummarizeResponse
 from app.services.summarizer import ollama_service
 from app.services.transformers_summarizer import transformers_service
@@ -25,8 +28,8 @@ async def summarize(payload: SummarizeRequest) -> SummarizeResponse:
     except httpx.TimeoutException as e:
         # Timeout error - provide helpful message
         raise HTTPException(
-            status_code=504, 
-            detail="Request timeout. The text may be too long or complex. Try reducing the text length or max_tokens."
+            status_code=504,
+            detail="Request timeout. The text may be too long or complex. Try reducing the text length or max_tokens.",
         )
     except httpx.HTTPError as e:
         # Upstream (Ollama) error
@@ -47,13 +50,13 @@ async def _stream_generator(payload: SummarizeRequest):
             # Format as SSE event
             sse_data = json.dumps(chunk)
             yield f"data: {sse_data}\n\n"
-            
+
     except httpx.TimeoutException as e:
         # Send error event in SSE format
         error_chunk = {
             "content": "",
             "done": True,
-            "error": "Request timeout. The text may be too long or complex. Try reducing the text length or max_tokens."
+            "error": "Request timeout. The text may be too long or complex. Try reducing the text length or max_tokens.",
         }
         sse_data = json.dumps(error_chunk)
         yield f"data: {sse_data}\n\n"
@@ -63,7 +66,7 @@ async def _stream_generator(payload: SummarizeRequest):
         error_chunk = {
             "content": "",
             "done": True,
-            "error": f"Summarization failed: {str(e)}"
+            "error": f"Summarization failed: {str(e)}",
         }
         sse_data = json.dumps(error_chunk)
         yield f"data: {sse_data}\n\n"
@@ -73,7 +76,7 @@ async def _stream_generator(payload: SummarizeRequest):
         error_chunk = {
             "content": "",
             "done": True,
-            "error": f"Internal server error: {str(e)}"
+            "error": f"Internal server error: {str(e)}",
         }
         sse_data = json.dumps(error_chunk)
         yield f"data: {sse_data}\n\n"
@@ -89,7 +92,7 @@ async def summarize_stream(payload: SummarizeRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-        }
+        },
     )
 
 
@@ -103,13 +106,13 @@ async def _pipeline_stream_generator(payload: SummarizeRequest):
             # Format as SSE event
             sse_data = json.dumps(chunk)
             yield f"data: {sse_data}\n\n"
-            
+
     except Exception as e:
         # Send error event in SSE format
         error_chunk = {
             "content": "",
             "done": True,
-            "error": f"Pipeline summarization failed: {str(e)}"
+            "error": f"Pipeline summarization failed: {str(e)}",
         }
         sse_data = json.dumps(error_chunk)
         yield f"data: {sse_data}\n\n"
@@ -125,7 +128,5 @@ async def summarize_pipeline_stream(payload: SummarizeRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-        }
+        },
     )
-
-

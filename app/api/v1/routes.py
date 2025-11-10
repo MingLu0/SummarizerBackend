@@ -1,6 +1,7 @@
 """
 API v1 routes for the text summarizer backend.
 """
+
 from fastapi import APIRouter
 
 from .summarize import router as summarize_router

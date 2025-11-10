@@ -1,6 +1,7 @@
 """
 V2 API routes for HuggingFace streaming summarization.
 """
+
 from fastapi import APIRouter
 
 from .summarize import router as summarize_router
