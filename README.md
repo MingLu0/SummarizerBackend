@@ -236,6 +236,10 @@ for line in response.iter_lines():
 ```
 
 ### V3 API (Web Scraping + Summarization) - Android App Primary Use Case
+
+**V3 supports two modes: URL scraping or direct text summarization**
+
+#### Mode 1: URL Scraping (recommended for articles)
 ```python
 import requests
 import json
@@ -255,13 +259,14 @@ response = requests.post(
 for line in response.iter_lines():
     if line.startswith(b'data: '):
         data = json.loads(line[6:])
-        
+
         # First event: metadata
         if data.get("type") == "metadata":
+            print(f"Input type: {data['data']['input_type']}")  # 'url'
             print(f"Title: {data['data']['title']}")
             print(f"Author: {data['data']['author']}")
             print(f"Scrape time: {data['data']['scrape_latency_ms']}ms\n")
-        
+
         # Content events
         elif "content" in data:
             print(data["content"], end="")
@@ -269,6 +274,43 @@ for line in response.iter_lines():
                 print(f"\n\nTotal time: {data['latency_ms']}ms")
                 break
 ```
+
+#### Mode 2: Direct Text Summarization (fallback when scraping fails)
+```python
+import requests
+import json
+
+# V3 direct text summarization (no scraping)
+response = requests.post(
+    "https://colin730-SummarizerApp.hf.space/api/v3/scrape-and-summarize/stream",
+    json={
+        "text": "Your article text here... (minimum 50 characters)",
+        "max_tokens": 256,
+        "include_metadata": True
+    },
+    stream=True
+)
+
+for line in response.iter_lines():
+    if line.startswith(b'data: '):
+        data = json.loads(line[6:])
+
+        # First event: metadata
+        if data.get("type") == "metadata":
+            print(f"Input type: {data['data']['input_type']}")  # 'text'
+            print(f"Text length: {data['data']['text_length']} chars\n")
+
+        # Content events
+        elif "content" in data:
+            print(data["content"], end="")
+            if data["done"]:
+                break
+```
+
+**Note:** Provide either `url` OR `text`, not both. Text mode is useful as a fallback when:
+- Article is behind a paywall
+- Website blocks scrapers
+- User has already extracted the text manually
 
 ### Android Client (SSE)
 ```kotlin
@@ -315,10 +357,15 @@ curl -X POST "https://colin730-SummarizerApp.hf.space/api/v2/summarize/stream" \
   -H "Content-Type: application/json" \
   -d '{"text": "Your text...", "max_tokens": 128}'
 
-# V3 API (Web scraping + summarization)
+# V3 API - URL mode (web scraping + summarization)
 curl -X POST "https://colin730-SummarizerApp.hf.space/api/v3/scrape-and-summarize/stream" \
   -H "Content-Type: application/json" \
   -d '{"url": "https://example.com/article", "max_tokens": 256, "include_metadata": true}'
+
+# V3 API - Text mode (direct summarization, no scraping)
+curl -X POST "https://colin730-SummarizerApp.hf.space/api/v3/scrape-and-summarize/stream" \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Your article text here (minimum 50 characters)...", "max_tokens": 256}'
 ```
 
 ### Test Script

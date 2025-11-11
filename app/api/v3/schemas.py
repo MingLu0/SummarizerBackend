@@ -5,16 +5,21 @@ Request and response schemas for V3 API.
 import re
 from typing import Optional
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class ScrapeAndSummarizeRequest(BaseModel):
-    """Request schema for scrape-and-summarize endpoint."""
+    """Request schema supporting both URL scraping and direct text summarization."""
 
-    url: str = Field(
-        ...,
+    url: Optional[str] = Field(
+        None,
         description="URL of article to scrape and summarize",
         example="https://example.com/article",
+    )
+    text: Optional[str] = Field(
+        None,
+        description="Direct text to summarize (alternative to URL)",
+        example="Your article text here...",
     )
     max_tokens: Optional[int] = Field(
         default=256, ge=1, le=2048, description="Maximum tokens in summary"
@@ -36,12 +41,25 @@ class ScrapeAndSummarizeRequest(BaseModel):
         default=True, description="Include article metadata in response"
     )
     use_cache: Optional[bool] = Field(
-        default=True, description="Use cached content if available"
+        default=True, description="Use cached content if available (URL mode only)"
     )
 
-    @validator("url")
-    def validate_url(cls, v):
+    @model_validator(mode="after")
+    def check_url_or_text(self):
+        """Ensure exactly one of url or text is provided."""
+        if not self.url and not self.text:
+            raise ValueError('Either "url" or "text" must be provided')
+        if self.url and self.text:
+            raise ValueError('Provide either "url" OR "text", not both')
+        return self
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, v: Optional[str]) -> Optional[str]:
         """Validate URL format and security."""
+        if v is None:
+            return v
+
         # Basic URL pattern validation
         url_pattern = re.compile(
             r"^https?://"  # http:// or https://
@@ -53,12 +71,12 @@ class ScrapeAndSummarizeRequest(BaseModel):
             re.IGNORECASE,
         )
         if not url_pattern.match(v):
-            raise ValueError("Invalid URL format")
+            raise ValueError("Invalid URL format. Must start with http:// or https://")
 
         # SSRF protection - block localhost and private IPs
         v_lower = v.lower()
         if "localhost" in v_lower or "127.0.0.1" in v_lower:
-            raise ValueError("Cannot scrape localhost")
+            raise ValueError("Cannot scrape localhost URLs")
 
         # Block common private IP ranges
         from urllib.parse import urlparse
@@ -95,7 +113,27 @@ class ScrapeAndSummarizeRequest(BaseModel):
 
         # Limit URL length
         if len(v) > 2000:
-            raise ValueError("URL too long (max 2000 characters)")
+            raise ValueError("URL too long (maximum 2000 characters)")
+
+        return v
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: Optional[str]) -> Optional[str]:
+        """Validate text content if provided."""
+        if v is None:
+            return v
+
+        if len(v) < 50:
+            raise ValueError("Text too short (minimum 50 characters)")
+
+        if len(v) > 50000:
+            raise ValueError("Text too long (maximum 50,000 characters)")
+
+        # Check for mostly whitespace
+        non_whitespace = len(v.replace(" ", "").replace("\n", "").replace("\t", ""))
+        if non_whitespace < 30:
+            raise ValueError("Text contains mostly whitespace")
 
         return v
 

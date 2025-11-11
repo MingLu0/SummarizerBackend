@@ -22,53 +22,80 @@ async def scrape_and_summarize_stream(
     request: Request, payload: ScrapeAndSummarizeRequest
 ):
     """
-    Scrape article from URL and stream summarization.
+    Scrape article from URL OR summarize provided text.
+
+    Supports two modes:
+    1. URL mode: Scrape article from URL then summarize
+    2. Text mode: Summarize provided text directly
 
     Process:
-    1. Scrape article content from URL (with caching)
-    2. Validate content quality
-    3. Stream summarization using V2 HF engine
+    - URL mode: Scrape article (with caching) -> Validate -> Stream summarization
+    - Text mode: Validate text -> Stream summarization
 
     Returns:
         Server-Sent Events stream with:
-        - Metadata event (title, author, scrape latency)
+        - Metadata event (input_type, title/author for URL mode, text_length for text mode)
         - Content chunks (streaming summary tokens)
         - Done event (final latency)
     """
     request_id = getattr(request.state, "request_id", "unknown")
-    logger.info(
-        f"[{request_id}] V3 scrape-and-summarize request for: {payload.url[:80]}..."
-    )
 
-    # Step 1: Scrape article
-    scrape_start = time.time()
-    try:
-        article_data = await article_scraper_service.scrape_article(
-            url=payload.url, use_cache=payload.use_cache
-        )
-    except Exception as e:
-        logger.error(f"[{request_id}] Scraping failed: {e}")
-        raise HTTPException(
-            status_code=502, detail=f"Failed to scrape article: {str(e)}"
-        )
+    # Determine input mode and prepare data
+    if payload.url:
+        # URL Mode: Scrape + Summarize
+        logger.info(f"[{request_id}] V3 URL mode: {payload.url[:80]}...")
 
-    scrape_latency_ms = (time.time() - scrape_start) * 1000
-    logger.info(
-        f"[{request_id}] Scraped in {scrape_latency_ms:.2f}ms, "
-        f"extracted {len(article_data['text'])} chars"
-    )
+        scrape_start = time.time()
+        try:
+            article_data = await article_scraper_service.scrape_article(
+                url=payload.url, use_cache=payload.use_cache
+            )
+        except Exception as e:
+            logger.error(f"[{request_id}] Scraping failed: {e}")
+            raise HTTPException(
+                status_code=502, detail=f"Failed to scrape article: {str(e)}"
+            )
 
-    # Step 2: Validate content
-    if len(article_data["text"]) < 100:
-        raise HTTPException(
-            status_code=422,
-            detail="Insufficient content extracted from URL. "
-            "Article may be behind paywall or site may block scrapers.",
+        scrape_latency_ms = (time.time() - scrape_start) * 1000
+        logger.info(
+            f"[{request_id}] Scraped in {scrape_latency_ms:.2f}ms, "
+            f"extracted {len(article_data['text'])} chars"
         )
 
-    # Step 3: Stream summarization
+        # Validate scraped content
+        if len(article_data["text"]) < 100:
+            raise HTTPException(
+                status_code=422,
+                detail="Insufficient content extracted from URL. "
+                "Article may be behind paywall or site may block scrapers.",
+            )
+
+        text_to_summarize = article_data["text"]
+        metadata = {
+            "input_type": "url",
+            "url": payload.url,
+            "title": article_data.get("title"),
+            "author": article_data.get("author"),
+            "date": article_data.get("date"),
+            "site_name": article_data.get("site_name"),
+            "scrape_method": article_data.get("method", "static"),
+            "scrape_latency_ms": scrape_latency_ms,
+            "extracted_text_length": len(article_data["text"]),
+        }
+
+    else:
+        # Text Mode: Direct Summarization
+        logger.info(f"[{request_id}] V3 text mode: {len(payload.text)} chars")
+
+        text_to_summarize = payload.text
+        metadata = {
+            "input_type": "text",
+            "text_length": len(payload.text),
+        }
+
+    # Stream summarization (same for both modes)
     return StreamingResponse(
-        _stream_generator(article_data, payload, scrape_latency_ms, request_id),
+        _stream_generator(text_to_summarize, payload, metadata, request_id),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -79,33 +106,21 @@ async def scrape_and_summarize_stream(
     )
 
 
-async def _stream_generator(article_data, payload, scrape_latency_ms, request_id):
-    """Generate SSE stream for scraping + summarization."""
+async def _stream_generator(text: str, payload, metadata: dict, request_id: str):
+    """Generate SSE stream for summarization (works for both URL and text modes)."""
 
     # Send metadata event first
     if payload.include_metadata:
-        metadata_event = {
-            "type": "metadata",
-            "data": {
-                "title": article_data.get("title"),
-                "author": article_data.get("author"),
-                "date": article_data.get("date"),
-                "site_name": article_data.get("site_name"),
-                "url": article_data.get("url"),
-                "scrape_method": article_data.get("method", "static"),
-                "scrape_latency_ms": scrape_latency_ms,
-                "extracted_text_length": len(article_data["text"]),
-            },
-        }
+        metadata_event = {"type": "metadata", "data": metadata}
         yield f"data: {json.dumps(metadata_event)}\n\n"
 
-    # Stream summarization chunks (reuse V2 HF service)
+    # Stream summarization chunks
     summarization_start = time.time()
     tokens_used = 0
 
     try:
         async for chunk in hf_streaming_service.summarize_text_stream(
-            text=article_data["text"],
+            text=text,
             max_new_tokens=payload.max_tokens,
             temperature=payload.temperature,
             top_p=payload.top_p,
@@ -123,9 +138,17 @@ async def _stream_generator(article_data, payload, scrape_latency_ms, request_id
         return
 
     summarization_latency_ms = (time.time() - summarization_start) * 1000
-    total_latency_ms = scrape_latency_ms + summarization_latency_ms
 
-    logger.info(
-        f"[{request_id}] V3 request completed in {total_latency_ms:.2f}ms "
-        f"(scrape: {scrape_latency_ms:.2f}ms, summary: {summarization_latency_ms:.2f}ms)"
-    )
+    # Calculate total latency (include scrape time for URL mode)
+    total_latency_ms = summarization_latency_ms
+    if metadata.get("input_type") == "url":
+        total_latency_ms += metadata.get("scrape_latency_ms", 0)
+        logger.info(
+            f"[{request_id}] V3 request completed in {total_latency_ms:.2f}ms "
+            f"(scrape: {metadata.get('scrape_latency_ms', 0):.2f}ms, "
+            f"summary: {summarization_latency_ms:.2f}ms)"
+        )
+    else:
+        logger.info(
+            f"[{request_id}] V3 text mode completed in {total_latency_ms:.2f}ms"
+        )
