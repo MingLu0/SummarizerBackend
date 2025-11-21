@@ -372,8 +372,7 @@ class HFStreamingSummarizer:
                 "streamer": streamer,
                 "max_new_tokens": max_new_tokens,
                 "do_sample": False,
-                "temperature": temperature,
-                "top_p": top_p,
+                # Note: temperature, top_p removed - incompatible with greedy decoding
                 "pad_token_id": pad_id,
                 "eos_token_id": eos_id,
             }
@@ -389,8 +388,8 @@ class HFStreamingSummarizer:
                 gen_kwargs["min_new_tokens"] = max(
                     50, min(max_new_tokens // 2, 200)
                 )
-            # Use slightly positive length_penalty to favor complete sentences
-            gen_kwargs["length_penalty"] = 1.2
+            # Note: length_penalty removed - only works with beam search (num_beams > 1)
+            # Using greedy decoding (num_beams=1) for speed
             # Reduce premature EOS in some checkpoints (optional)
             gen_kwargs["no_repeat_ngram_size"] = 3
             gen_kwargs["repetition_penalty"] = 1.05
@@ -668,15 +667,13 @@ class HFStreamingSummarizer:
                 "streamer": streamer,
                 "max_new_tokens": max_new_tokens,
                 "do_sample": False,
-                "temperature": temperature,
-                "top_p": top_p,
+                # Note: temperature, top_p, length_penalty removed - incompatible with greedy decoding
                 "pad_token_id": pad_id,
                 "eos_token_id": eos_id,
                 "num_return_sequences": 1,
                 "num_beams": 1,
                 "num_beam_groups": 1,
                 "min_new_tokens": calculated_min_tokens,
-                "length_penalty": 1.2,
                 "no_repeat_ngram_size": 3,
                 "repetition_penalty": 1.05,
                 # CRITICAL: Override model config defaults that cause early stopping

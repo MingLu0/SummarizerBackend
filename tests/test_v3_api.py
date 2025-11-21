@@ -315,7 +315,7 @@ def test_adaptive_tokens_medium_article(client: TestClient):
     with patch(
         "app.services.article_scraper.article_scraper_service.scrape_article"
     ) as mock_scrape:
-        # Medium article: ~2000 chars -> should get 500 tokens (2000 // 4)
+        # Medium article: ~2000 chars -> should get 666 tokens (2000 // 3)
         mock_scrape.return_value = {
             "text": "Medium article content. " * 80,  # ~2000 chars
             "title": "Medium Article",
@@ -341,8 +341,9 @@ def test_adaptive_tokens_medium_article(client: TestClient):
             )
 
             assert response.status_code == 200
-            # For 2000 chars with default max_tokens=512, should get ~500 tokens
-            assert 450 <= captured_kwargs.get("max_new_tokens", 0) <= 512
+            # Now ignores client's max_tokens, uses adaptive calculation
+            # For 2000 chars: 2000 // 3 = 666 tokens (client's 512 is ignored)
+            assert 600 <= captured_kwargs.get("max_new_tokens", 0) <= 700
             # min_length should be 60% of max_new_tokens
             expected_min = int(captured_kwargs["max_new_tokens"] * 0.6)
             assert captured_kwargs.get("min_length", 0) == expected_min
@@ -386,8 +387,8 @@ def test_adaptive_tokens_long_article(client: TestClient):
             assert captured_kwargs.get("min_length", 0) == expected_min
 
 
-def test_user_max_tokens_respected(client: TestClient):
-    """Test that user-specified max_tokens is respected when lower than adaptive."""
+def test_user_max_tokens_ignored_for_quality(client: TestClient):
+    """Test that user-specified max_tokens is IGNORED to ensure quality summaries."""
     with patch(
         "app.services.article_scraper.article_scraper_service.scrape_article"
     ) as mock_scrape:
@@ -411,15 +412,15 @@ def test_user_max_tokens_respected(client: TestClient):
             "app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream",
             side_effect=mock_stream,
         ):
-            # User requests only 400 tokens
+            # User requests only 400 tokens, but backend will ignore and use adaptive
             response = client.post(
                 "/api/v3/scrape-and-summarize/stream",
                 json={"url": "https://example.com/long", "max_tokens": 400},
             )
 
             assert response.status_code == 200
-            # Should respect user's limit of 400
-            assert captured_kwargs.get("max_new_tokens", 0) <= 400
+            # Ignores user's 400, uses adaptive (4000 // 3 = 1333, capped at 1024)
+            assert captured_kwargs.get("max_new_tokens", 0) == 1024
             # min_length should still be 60% of the actual max used
             expected_min = int(captured_kwargs["max_new_tokens"] * 0.6)
             assert captured_kwargs.get("min_length", 0) == expected_min
