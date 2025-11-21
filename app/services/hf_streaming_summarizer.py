@@ -394,6 +394,10 @@ class HFStreamingSummarizer:
             # Reduce premature EOS in some checkpoints (optional)
             gen_kwargs["no_repeat_ngram_size"] = 3
             gen_kwargs["repetition_penalty"] = 1.05
+            # CRITICAL: Override model config defaults that cause early stopping
+            gen_kwargs["forced_eos_token_id"] = None  # Disable forced EOS from model config
+            gen_kwargs["forced_bos_token_id"] = None  # Disable forced BOS for consistency
+            gen_kwargs["early_stopping"] = False  # Disable early stopping to respect min_new_tokens
             # Extra safety: remove any stray args that imply multiple sequences
             for k in ("num_beam_groups", "num_beams", "num_return_sequences"):
                 # Reassert values in case something upstream re-injected them
@@ -402,6 +406,14 @@ class HFStreamingSummarizer:
             # Also guard against grouped beam search leftovers
             gen_kwargs.pop("diversity_penalty", None)
             gen_kwargs.pop("num_return_sequences_per_prompt", None)
+
+            # Log generation parameters for debugging
+            logger.info(
+                f"Generation params: max_new_tokens={gen_kwargs['max_new_tokens']}, "
+                f"min_new_tokens={gen_kwargs['min_new_tokens']}, "
+                f"early_stopping={gen_kwargs['early_stopping']}, "
+                f"forced_eos_token_id={gen_kwargs['forced_eos_token_id']}"
+            )
 
             generation_thread = threading.Thread(
                 target=self.model.generate, kwargs=gen_kwargs, daemon=True
@@ -667,7 +679,18 @@ class HFStreamingSummarizer:
                 "length_penalty": 1.2,
                 "no_repeat_ngram_size": 3,
                 "repetition_penalty": 1.05,
+                # CRITICAL: Override model config defaults that cause early stopping
+                "forced_eos_token_id": None,  # Disable forced EOS from model config
+                "forced_bos_token_id": None,  # Disable forced BOS for consistency
+                "early_stopping": False,  # Disable early stopping to respect min_new_tokens
             }
+
+            # Log generation parameters for debugging
+            logger.info(
+                f"Chunk generation params: max_new_tokens={gen_kwargs['max_new_tokens']}, "
+                f"min_new_tokens={gen_kwargs['min_new_tokens']}, "
+                f"early_stopping={gen_kwargs['early_stopping']}"
+            )
 
             generation_thread = threading.Thread(
                 target=self.model.generate, kwargs=gen_kwargs, daemon=True
