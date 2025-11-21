@@ -167,7 +167,6 @@ class HFStreamingSummarizer:
         self,
         text: str,
         max_new_tokens: int = None,
-        min_length: int = None,
         temperature: float = None,
         top_p: float = None,
         prompt: str = "Summarize the key points concisely:",
@@ -178,7 +177,6 @@ class HFStreamingSummarizer:
         Args:
             text: Input text to summarize
             max_new_tokens: Maximum new tokens to generate
-            min_length: Minimum length of generated summary (encourages complete thoughts)
             temperature: Sampling temperature
             top_p: Nucleus sampling parameter
             prompt: System prompt for summarization
@@ -211,7 +209,7 @@ class HFStreamingSummarizer:
                 f"Text is long ({text_length} chars), using recursive summarization"
             )
             async for chunk in self._recursive_summarize(
-                text, max_new_tokens, min_length, temperature, top_p, prompt
+                text, max_new_tokens, temperature, top_p, prompt
             ):
                 yield chunk
             return
@@ -372,7 +370,8 @@ class HFStreamingSummarizer:
                 "streamer": streamer,
                 "max_new_tokens": max_new_tokens,
                 "do_sample": False,
-                # Note: temperature, top_p removed - incompatible with greedy decoding
+                "temperature": temperature,
+                "top_p": top_p,
                 "pad_token_id": pad_id,
                 "eos_token_id": eos_id,
             }
@@ -380,23 +379,15 @@ class HFStreamingSummarizer:
             gen_kwargs["num_return_sequences"] = 1
             gen_kwargs["num_beams"] = 1
             gen_kwargs["num_beam_groups"] = 1
-            # Set min_new_tokens: use provided min_length if available, else calculate
-            if min_length is not None:
-                gen_kwargs["min_new_tokens"] = min_length
-            else:
-                # Ensure minimum quality: at least 50 tokens, up to half of max (capped at 200)
-                gen_kwargs["min_new_tokens"] = max(
-                    50, min(max_new_tokens // 2, 200)
-                )
-            # Note: length_penalty removed - only works with beam search (num_beams > 1)
-            # Using greedy decoding (num_beams=1) for speed
+            # Set conservative min_new_tokens to prevent rambling
+            gen_kwargs["min_new_tokens"] = max(
+                20, min(50, max_new_tokens // 4)
+            )  # floor ~20-50
+            # Use neutral length_penalty to avoid encouraging longer outputs
+            gen_kwargs["length_penalty"] = 1.0
             # Reduce premature EOS in some checkpoints (optional)
             gen_kwargs["no_repeat_ngram_size"] = 3
             gen_kwargs["repetition_penalty"] = 1.05
-            # CRITICAL: Override model config defaults that cause early stopping
-            gen_kwargs["forced_eos_token_id"] = None  # Disable forced EOS from model config
-            gen_kwargs["forced_bos_token_id"] = None  # Disable forced BOS for consistency
-            gen_kwargs["early_stopping"] = False  # Disable early stopping to respect min_new_tokens
             # Extra safety: remove any stray args that imply multiple sequences
             for k in ("num_beam_groups", "num_beams", "num_return_sequences"):
                 # Reassert values in case something upstream re-injected them
@@ -405,14 +396,6 @@ class HFStreamingSummarizer:
             # Also guard against grouped beam search leftovers
             gen_kwargs.pop("diversity_penalty", None)
             gen_kwargs.pop("num_return_sequences_per_prompt", None)
-
-            # Log generation parameters for debugging
-            logger.info(
-                f"Generation params: max_new_tokens={gen_kwargs['max_new_tokens']}, "
-                f"min_new_tokens={gen_kwargs['min_new_tokens']}, "
-                f"early_stopping={gen_kwargs['early_stopping']}, "
-                f"forced_eos_token_id={gen_kwargs['forced_eos_token_id']}"
-            )
 
             generation_thread = threading.Thread(
                 target=self.model.generate, kwargs=gen_kwargs, daemon=True
@@ -463,7 +446,6 @@ class HFStreamingSummarizer:
         self,
         text: str,
         max_new_tokens: int,
-        min_length: int,
         temperature: float,
         top_p: float,
         prompt: str,
@@ -471,8 +453,6 @@ class HFStreamingSummarizer:
         """
         Recursively summarize long text by chunking and summarizing each chunk,
         then summarizing the summaries if there are multiple chunks.
-
-        Note: min_length is used for the final summary only, not for individual chunks.
         """
         try:
             # Split text into chunks of ~800-1000 tokens
@@ -487,9 +467,8 @@ class HFStreamingSummarizer:
             for i, chunk in enumerate(chunks):
                 logger.info(f"Summarizing chunk {i+1}/{len(chunks)}")
 
-                # Use reasonable max_new_tokens for individual chunks
-                # Allow at least half of max, up to 200 tokens per chunk
-                chunk_max_tokens = min(max_new_tokens // 2, 200)
+                # Use smaller max_new_tokens for individual chunks
+                chunk_max_tokens = min(max_new_tokens, 80)
 
                 chunk_summary = ""
                 async for chunk_result in self._single_chunk_summarize(
@@ -506,14 +485,13 @@ class HFStreamingSummarizer:
                 logger.info("Creating final summary of summaries")
                 combined_summaries = "\n\n".join(chunk_summaries)
 
-                # Use original max_new_tokens and min_length for final summary
+                # Use original max_new_tokens for final summary
                 async for final_result in self._single_chunk_summarize(
                     combined_summaries,
                     max_new_tokens,
                     temperature,
                     top_p,
                     "Summarize the key points from these summaries:",
-                    min_length=min_length,
                 ):
                     yield final_result
             else:
@@ -539,14 +517,10 @@ class HFStreamingSummarizer:
         temperature: float,
         top_p: float,
         prompt: str,
-        min_length: int = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         """
         Summarize a single chunk of text using the same logic as the main method
         but without the recursive check.
-
-        Args:
-            min_length: Optional minimum length for generation
         """
         if not self.model or not self.tokenizer:
             error_msg = (
@@ -655,39 +629,23 @@ class HFStreamingSummarizer:
                 self.tokenizer, skip_prompt=True, skip_special_tokens=True
             )
 
-            # Set min_new_tokens: use provided min_length if available, else calculate
-            if min_length is not None:
-                calculated_min_tokens = min_length
-            else:
-                # Ensure minimum quality: at least 50 tokens, up to half of max (capped at 200)
-                calculated_min_tokens = max(50, min(max_new_tokens // 2, 200))
-
             gen_kwargs = {
                 **inputs,
                 "streamer": streamer,
                 "max_new_tokens": max_new_tokens,
                 "do_sample": False,
-                # Note: temperature, top_p, length_penalty removed - incompatible with greedy decoding
+                "temperature": temperature,
+                "top_p": top_p,
                 "pad_token_id": pad_id,
                 "eos_token_id": eos_id,
                 "num_return_sequences": 1,
                 "num_beams": 1,
                 "num_beam_groups": 1,
-                "min_new_tokens": calculated_min_tokens,
+                "min_new_tokens": max(20, min(50, max_new_tokens // 4)),
+                "length_penalty": 1.0,
                 "no_repeat_ngram_size": 3,
                 "repetition_penalty": 1.05,
-                # CRITICAL: Override model config defaults that cause early stopping
-                "forced_eos_token_id": None,  # Disable forced EOS from model config
-                "forced_bos_token_id": None,  # Disable forced BOS for consistency
-                "early_stopping": False,  # Disable early stopping to respect min_new_tokens
             }
-
-            # Log generation parameters for debugging
-            logger.info(
-                f"Chunk generation params: max_new_tokens={gen_kwargs['max_new_tokens']}, "
-                f"min_new_tokens={gen_kwargs['min_new_tokens']}, "
-                f"early_stopping={gen_kwargs['early_stopping']}"
-            )
 
             generation_thread = threading.Thread(
                 target=self.model.generate, kwargs=gen_kwargs, daemon=True

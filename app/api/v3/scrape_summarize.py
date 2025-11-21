@@ -114,25 +114,6 @@ async def _stream_generator(text: str, payload, metadata: dict, request_id: str)
         metadata_event = {"type": "metadata", "data": metadata}
         yield f"data: {json.dumps(metadata_event)}\n\n"
 
-    # Calculate adaptive token limits based on text length
-    # Formula: scale tokens with input length, but enforce min/max bounds
-    # Note: Ignores client's max_tokens to ensure quality (client often sends too-low values)
-    text_length = len(text)
-    adaptive_max_tokens = min(
-        max(text_length // 3, 300),  # At least 300 tokens, scale ~33% of input chars
-        1024,  # Cap at 1024 to avoid excessive generation
-    )
-    # Calculate minimum length (60% of max) to encourage complete thoughts
-    adaptive_min_length = int(adaptive_max_tokens * 0.6)
-
-    logger.info(
-        f"[{request_id}] Adaptive token calculation: "
-        f"text_length={text_length}, "
-        f"requested_max={payload.max_tokens}, "
-        f"adaptive_max={adaptive_max_tokens}, "
-        f"adaptive_min={adaptive_min_length}"
-    )
-
     # Stream summarization chunks
     summarization_start = time.time()
     tokens_used = 0
@@ -140,8 +121,7 @@ async def _stream_generator(text: str, payload, metadata: dict, request_id: str)
     try:
         async for chunk in hf_streaming_service.summarize_text_stream(
             text=text,
-            max_new_tokens=adaptive_max_tokens,
-            min_length=adaptive_min_length,
+            max_new_tokens=payload.max_tokens,
             temperature=payload.temperature,
             top_p=payload.top_p,
             prompt=payload.prompt,
