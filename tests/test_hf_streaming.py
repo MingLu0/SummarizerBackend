@@ -175,3 +175,47 @@ class TestHFStreamingServiceIntegration:
         result = await hf_streaming_service.check_health()
         # Should return False when transformers not available
         assert result is False
+
+
+class TestHFGenerationParameters:
+    """Test HF service generation parameters (min_length, length_penalty).
+
+    Note: These tests verify the method signature and parameter acceptance.
+    Full integration testing is done in test_v3_api.py.
+    """
+
+    def test_summarize_text_stream_accepts_min_length_parameter(self):
+        """Test that summarize_text_stream accepts min_length parameter."""
+        import inspect
+
+        service = HFStreamingSummarizer()
+        sig = inspect.signature(service.summarize_text_stream)
+
+        # Verify min_length parameter exists
+        assert "min_length" in sig.parameters
+        # Verify it has default None
+        assert sig.parameters["min_length"].default is None
+
+    def test_single_chunk_summarize_accepts_min_length_parameter(self):
+        """Test that _single_chunk_summarize accepts min_length parameter."""
+        import inspect
+
+        service = HFStreamingSummarizer()
+        sig = inspect.signature(service._single_chunk_summarize)
+
+        # Verify min_length parameter exists
+        assert "min_length" in sig.parameters
+        # Verify it has default None
+        assert sig.parameters["min_length"].default is None
+
+    def test_recursive_summarize_accepts_min_length_parameter(self):
+        """Test that _recursive_summarize accepts min_length parameter."""
+        import inspect
+
+        service = HFStreamingSummarizer()
+        sig = inspect.signature(service._recursive_summarize)
+
+        # Verify min_length parameter exists
+        assert "min_length" in sig.parameters
+        # Verify it's a required parameter (no default)
+        assert sig.parameters["min_length"].default == inspect.Parameter.empty

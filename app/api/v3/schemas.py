@@ -22,7 +22,10 @@ class ScrapeAndSummarizeRequest(BaseModel):
         example="Your article text here...",
     )
     max_tokens: Optional[int] = Field(
-        default=256, ge=1, le=2048, description="Maximum tokens in summary"
+        default=512,
+        ge=1,
+        le=2048,
+        description="Maximum tokens in summary. Higher values allow more complete summaries for long articles.",
     )
     temperature: Optional[float] = Field(
         default=0.3,
