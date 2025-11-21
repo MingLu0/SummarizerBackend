@@ -385,9 +385,10 @@ class HFStreamingSummarizer:
             if min_length is not None:
                 gen_kwargs["min_new_tokens"] = min_length
             else:
+                # Ensure minimum quality: at least 50 tokens, up to half of max (capped at 200)
                 gen_kwargs["min_new_tokens"] = max(
-                    20, min(50, max_new_tokens // 4)
-                )  # floor ~20-50
+                    50, min(max_new_tokens // 2, 200)
+                )
             # Use slightly positive length_penalty to favor complete sentences
             gen_kwargs["length_penalty"] = 1.2
             # Reduce premature EOS in some checkpoints (optional)
@@ -475,8 +476,9 @@ class HFStreamingSummarizer:
             for i, chunk in enumerate(chunks):
                 logger.info(f"Summarizing chunk {i+1}/{len(chunks)}")
 
-                # Use smaller max_new_tokens for individual chunks
-                chunk_max_tokens = min(max_new_tokens, 80)
+                # Use reasonable max_new_tokens for individual chunks
+                # Allow at least half of max, up to 200 tokens per chunk
+                chunk_max_tokens = min(max_new_tokens // 2, 200)
 
                 chunk_summary = ""
                 async for chunk_result in self._single_chunk_summarize(
@@ -646,7 +648,8 @@ class HFStreamingSummarizer:
             if min_length is not None:
                 calculated_min_tokens = min_length
             else:
-                calculated_min_tokens = max(20, min(50, max_new_tokens // 4))
+                # Ensure minimum quality: at least 50 tokens, up to half of max (capped at 200)
+                calculated_min_tokens = max(50, min(max_new_tokens // 2, 200))
 
             gen_kwargs = {
                 **inputs,

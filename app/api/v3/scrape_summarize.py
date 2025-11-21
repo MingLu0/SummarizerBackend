@@ -118,7 +118,7 @@ async def _stream_generator(text: str, payload, metadata: dict, request_id: str)
     # Formula: scale tokens with input length, but enforce min/max bounds
     text_length = len(text)
     adaptive_max_tokens = min(
-        max(text_length // 4, 300),  # At least 300 tokens, scale with length
+        max(text_length // 3, 300),  # At least 300 tokens, scale ~33% of input chars
         payload.max_tokens,  # Respect user's max if specified
         1024,  # Cap at 1024 to avoid excessive generation
     )
