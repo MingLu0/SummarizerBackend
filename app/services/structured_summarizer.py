@@ -50,7 +50,7 @@ class StructuredSummarizer:
             self.model = AutoModelForCausalLM.from_pretrained(
                 settings.v4_model_id,
                 torch_dtype=torch.float32,  # Base dtype for CPU
-                device_map="cpu",
+                device_map="auto",
                 cache_dir=settings.hf_cache_dir,
                 trust_remote_code=True,
             )
