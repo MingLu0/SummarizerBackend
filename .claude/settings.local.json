@@ -1,7 +1,30 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git log:*)",
+      "Bash(pytest:*)",
+      "Bash(git push:*)",
+      "Bash(python3:*)",
+      "Bash(tree:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(lsof:*)",
+      "Bash(python test_v3_live.py:*)",
+      "Bash(pkill:*)",
+      "Bash(pip install:*)",
+      "Bash(pip --version:*)",
+      "Bash(python:*)",
+      "Bash(conda install:*)",
+      "Bash(conda env:*)",
+      "Bash(conda run:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(timeout 15 conda run --no-capture-output -n summarizer python -m uvicorn:*)",
+      "Bash(/opt/anaconda3/envs/summarizer/bin/python:*)",
+      "Bash(ENABLE_V4_WARMUP=true timeout 15 /opt/anaconda3/envs/summarizer/bin/python:*)",
+      "Bash(ENABLE_V4_WARMUP=true /opt/anaconda3/envs/summarizer/bin/python:*)"
     ],
     "deny": [],
     "ask": []
