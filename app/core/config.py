@@ -107,9 +107,9 @@ class Settings(BaseSettings):
         description="Enable V4 model warmup on startup (uses 1-2GB RAM with quantization)",
     )
     v4_model_id: str = Field(
-        default="microsoft/Phi-3-mini-4k-instruct",
+        default="Qwen/Qwen2.5-1.5B-Instruct",
         env="V4_MODEL_ID",
-        description="Model ID for V4 structured output (3.8B params, optimized for instruction following)",
+        description="Model ID for V4 structured output (1.5B params, fits HF 16GB limit)",
     )
     v4_max_tokens: int = Field(
         default=1024, env="V4_MAX_TOKENS", ge=128, le=2048, description="Max tokens for V4 generation"
