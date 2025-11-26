@@ -25,8 +25,8 @@ logger = get_logger(__name__)
 # Create FastAPI app
 app = FastAPI(
     title="Text Summarizer API",
-    description="A FastAPI backend with multiple summarization engines: V1 (Ollama + Transformers pipeline), V2 (HuggingFace streaming), and V3 (Web scraping + Summarization)",
-    version="3.0.0",
+    description="A FastAPI backend with multiple summarization engines: V1 (Ollama + Transformers pipeline), V2 (HuggingFace streaming), V3 (Web scraping + Summarization), and V4 (Structured summarization with Phi-3)",
+    version="4.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
     # Make app aware of reverse-proxy prefix used by HF Spaces (if any)
@@ -61,6 +61,15 @@ if settings.enable_v3_scraping:
 else:
     logger.info("⏭️ V3 Web Scraping API disabled")
 
+# Conditionally include V4 router
+if settings.enable_v4_structured:
+    from app.api.v4.routes import api_router as v4_api_router
+
+    app.include_router(v4_api_router, prefix="/api/v4")
+    logger.info("✅ V4 Structured Summarization API enabled")
+else:
+    logger.info("⏭️ V4 Structured Summarization API disabled")
+
 
 @app.on_event("startup")
 async def startup_event():
@@ -69,6 +78,7 @@ async def startup_event():
     logger.info(f"V1 warmup enabled: {settings.enable_v1_warmup}")
     logger.info(f"V2 warmup enabled: {settings.enable_v2_warmup}")
     logger.info(f"V3 scraping enabled: {settings.enable_v3_scraping}")
+    logger.info(f"V4 structured enabled: {settings.enable_v4_structured}")
 
     # V1 Ollama warmup (conditional)
     if settings.enable_v1_warmup:
@@ -141,6 +151,26 @@ async def startup_event():
         if settings.scraping_cache_enabled:
             logger.info(f"V3 cache TTL: {settings.scraping_cache_ttl}s")
 
+    # V4 structured summarization warmup (conditional)
+    if settings.enable_v4_structured:
+        logger.info(f"V4 warmup enabled: {settings.enable_v4_warmup}")
+        logger.info(f"V4 model: {settings.v4_model_id}")
+
+        if settings.enable_v4_warmup:
+            from app.services.structured_summarizer import structured_summarizer_service
+
+            logger.info("🔥 Warming up V4 Phi-3 model (this may take 30-60s)...")
+            try:
+                v4_start = time.time()
+                await structured_summarizer_service.warm_up_model()
+                v4_time = time.time() - v4_start
+                logger.info(f"✅ V4 model warmup completed in {v4_time:.2f}s")
+            except Exception as e:
+                logger.warning(f"⚠️ V4 model warmup failed: {e}")
+                logger.warning("V4 endpoints will be slower on first request")
+        else:
+            logger.info("⏭️ Skipping V4 warmup (disabled to save memory)")
+
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -153,12 +183,13 @@ async def root():
     """Root endpoint."""
     return {
         "message": "Text Summarizer API",
-        "version": "3.0.0",
+        "version": "4.0.0",
         "docs": "/docs",
         "endpoints": {
             "v1": "/api/v1",
             "v2": "/api/v2",
             "v3": "/api/v3" if settings.enable_v3_scraping else None,
+            "v4": "/api/v4" if settings.enable_v4_structured else None,
         },
     }
 
@@ -166,7 +197,7 @@ async def root():
 @app.get("/health")
 async def health_check():
     """Health check endpoint."""
-    return {"status": "ok", "service": "text-summarizer-api", "version": "3.0.0"}
+    return {"status": "ok", "service": "text-summarizer-api", "version": "4.0.0"}
 
 
 @app.get("/debug/config")
@@ -188,6 +219,14 @@ async def debug_config():
         ),
         "scraping_cache_enabled": (
             settings.scraping_cache_enabled if settings.enable_v3_scraping else None
+        ),
+        "enable_v4_structured": settings.enable_v4_structured,
+        "enable_v4_warmup": (
+            settings.enable_v4_warmup if settings.enable_v4_structured else None
+        ),
+        "v4_model_id": settings.v4_model_id if settings.enable_v4_structured else None,
+        "v4_max_tokens": (
+            settings.v4_max_tokens if settings.enable_v4_structured else None
         ),
     }
 

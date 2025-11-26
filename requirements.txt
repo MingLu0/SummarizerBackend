@@ -13,10 +13,13 @@ pydantic-settings>=2.0.0,<3.0.0
 python-dotenv>=0.19.0,<1.0.0
 
 # Transformers for fast summarization
-transformers>=4.30.0,<5.0.0
+transformers>=4.41.0,<5.0.0  # Updated for Phi-3 support (V4)
 torch>=2.0.0,<3.0.0
 sentencepiece>=0.1.99,<0.3.0
 accelerate>=0.20.0,<1.0.0
+einops>=0.6.0,<1.0.0  # Required for Phi-3 architecture (V4)
+scipy>=1.10.0,<2.0.0  # Often needed for unquantized models (V4)
+torchao>=0.6.0  # CPU-optimized INT8 quantization for V4 (reduces memory 73%)
 
 # Testing
 pytest>=7.0.0,<8.0.0

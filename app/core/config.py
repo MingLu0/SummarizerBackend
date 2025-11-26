@@ -97,6 +97,32 @@ class Settings(BaseSettings):
         description="Max scraping requests per minute per IP",
     )
 
+    # V4 Structured Output Configuration
+    enable_v4_structured: bool = Field(
+        default=True, env="ENABLE_V4_STRUCTURED", description="Enable V4 structured summarization API"
+    )
+    enable_v4_warmup: bool = Field(
+        default=False,
+        env="ENABLE_V4_WARMUP",
+        description="Enable V4 model warmup on startup (uses 1-2GB RAM with quantization)",
+    )
+    v4_model_id: str = Field(
+        default="Qwen/Qwen2.5-0.5B-Instruct",
+        env="V4_MODEL_ID",
+        description="Model ID for V4 structured output (490M params, optimized for CPU, no auth required)",
+    )
+    v4_max_tokens: int = Field(
+        default=1024, env="V4_MAX_TOKENS", ge=128, le=2048, description="Max tokens for V4 generation"
+    )
+    v4_temperature: float = Field(
+        default=0.2, env="V4_TEMPERATURE", ge=0.0, le=2.0, description="Temperature for V4 (low for stable JSON)"
+    )
+    v4_enable_quantization: bool = Field(
+        default=True,
+        env="V4_ENABLE_QUANTIZATION",
+        description="Enable INT8 quantization for V4 model (reduces memory from ~2GB to ~1GB). Quantization takes ~1-2 minutes on startup.",
+    )
+
     @validator("log_level")
     def validate_log_level(cls, v):
         """Validate log level is one of the standard levels."""

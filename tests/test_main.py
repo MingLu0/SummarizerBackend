@@ -18,7 +18,7 @@ class TestMainApp:
         assert response.status_code == 200
         data = response.json()
         assert data["message"] == "Text Summarizer API"
-        assert data["version"] == "3.0.0"
+        assert data["version"] == "4.0.0"
         assert data["docs"] == "/docs"
 
     def test_health_endpoint(self, client):
@@ -29,7 +29,7 @@ class TestMainApp:
         data = response.json()
         assert data["status"] == "ok"
         assert data["service"] == "text-summarizer-api"
-        assert data["version"] == "3.0.0"
+        assert data["version"] == "4.0.0"
 
     def test_docs_endpoint(self, client):
         """Test that docs endpoint is accessible."""
