@@ -55,8 +55,8 @@ class Settings(BaseSettings):
         default=False, env="ENABLE_V1_WARMUP"
     )  # Disable V1 warmup by default
     enable_v2_warmup: bool = Field(
-        default=True, env="ENABLE_V2_WARMUP"
-    )  # Enable V2 warmup
+        default=False, env="ENABLE_V2_WARMUP"
+    )  # Disable V2 warmup to save memory for V4
 
     # V3 Web Scraping Configuration
     enable_v3_scraping: bool = Field(
