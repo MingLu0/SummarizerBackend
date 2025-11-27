@@ -207,7 +207,7 @@ Rules:
         return False
 
     def _build_prompt(self, text: str, style: str) -> str:
-        """Build the complete prompt for Phi-3."""
+        """Build the complete prompt for Qwen2.5 using its chat template."""
         system_prompt = self._build_system_prompt()
         style_instruction = self._build_style_instruction(style)
 
@@ -217,14 +217,29 @@ Rules:
             text = text[:max_chars]
             logger.warning(f"Truncated text from {len(text)} to {max_chars} chars")
 
-        # Phi-3 chat template format
-        full_prompt = (
-            f"<|system|>\n{system_prompt}\n<|end|>\n"
-            f"<|user|>\n{style_instruction}\n\nArticle:\n{text}\n<|end|>\n"
-            f"<|assistant|>"
-        )
+        messages = [
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"{style_instruction}\n\n"
+                    f"Article:\n{text}\n\n"
+                    "Remember: respond ONLY with newline-delimited JSON patch objects "
+                    "as described in the system message. "
+                    "No explanations, no comments, no markdown, no code, no prose."
+                ),
+            },
+        ]
 
-        return full_prompt
+        # Let Qwen's tokenizer construct the correct special tokens and format
+        return self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True,
+        )
 
     async def summarize_structured_stream(
         self,
@@ -416,11 +431,21 @@ Rules:
                         if not line:
                             continue
 
+                        # Heuristic: skip anything that clearly isn't a JSON patch object
+                        # This filters out lines like "#include <bits/stdc++.h>" or random prose.
+                        if not line.startswith("{") or "op" not in line:
+                            logger.warning(
+                                f"Skipping non-JSON-looking line: {line[:80]}..."
+                            )
+                            continue
+
                         # Try to parse JSON patch
                         try:
                             patch = json.loads(line)
                         except json.JSONDecodeError as e:
-                            logger.warning(f"Failed to parse NDJSON line: {line[:100]}... Error: {e}")
+                            logger.warning(
+                                f"Failed to parse NDJSON line: {line[:100]}... Error: {e}"
+                            )
                             continue
 
                         # Apply patch to state
