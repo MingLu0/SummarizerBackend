@@ -158,6 +158,17 @@ Patch formats:
    {"op": "done"}
 
 Rules:
+- You MUST always set all scalar fields before finishing:
+  1) First patch: {"op": "set", "field": "title", ...}
+  2) Second patch: {"op": "set", "field": "main_summary", ...}
+  3) Third patch: {"op": "set", "field": "category", ...}
+  4) Fourth patch: {"op": "set", "field": "sentiment", ...}
+  5) Fifth patch: {"op": "set", "field": "read_time_min", ...}
+  6) Then emit multiple {"op": "append", "field": "key_points", ...} patches (at least 5).
+  7) Only AFTER all these fields are set and at least 5 key_points have been appended,
+     output exactly one final line: {"op": "done"}.
+- NEVER output {"op": "done"} if any of title, main_summary, category,
+  sentiment or read_time_min is missing or null.
 - Output ONLY these JSON patch objects, one per line (NDJSON).
 - Never wrap them in an outer array.
 - Do NOT output the final combined object; only the patches.
@@ -205,6 +216,57 @@ Rules:
             state[field].append(patch.get("value"))
 
         return False
+
+    def _fallback_fill_missing_fields(
+        self,
+        text: str,
+        state: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Fallback to fill missing fields when the model stopped early
+        and did not provide title, main_summary, or read_time_min.
+
+        Strategy:
+        - If title is missing, derive it from the main_summary or first key point.
+        - If main_summary is missing, derive it from the first 2-3 key points.
+        - If read_time_min is missing, estimate from text length.
+        """
+        # Estimate reading time if missing
+        if state.get("read_time_min") is None:
+            # Simple heuristic: 200 words per minute
+            words = text.split()
+            minutes = max(1, round(len(words) / 200))
+            state["read_time_min"] = minutes
+
+        # Build a lightweight summary from key_points if main_summary is missing
+        if state.get("main_summary") is None:
+            key_points = state.get("key_points") or []
+            if key_points:
+                # Use up to first 3 key points to form a paragraph
+                summary_parts = key_points[:3]
+                state["main_summary"] = " ".join(summary_parts)
+            else:
+                # As a last resort, use the first 2-3 sentences from the article itself
+                sentences = text.split(". ")
+                state["main_summary"] = ". ".join(sentences[:3]).strip()
+
+        # Derive title if missing
+        if state.get("title") is None:
+            # If we now have a main_summary, use its beginning as a title
+            if state.get("main_summary"):
+                summary_words = state["main_summary"].split()
+                # Keep it short-ish; 10-14 words
+                title_words = summary_words[:14]
+                title = " ".join(title_words).strip()
+                # Add ellipsis if we truncated
+                if len(summary_words) > len(title_words):
+                    title += "..."
+                state["title"] = title
+            else:
+                # Fallback: very short generic title
+                state["title"] = "Article Summary"
+
+        return state
 
     def _build_prompt(self, text: str, style: str) -> str:
         """Build the complete prompt for Qwen2.5 using its chat template."""
@@ -442,6 +504,16 @@ Rules:
                         # Try to parse JSON patch
                         try:
                             patch = json.loads(line)
+                            
+                            # Log each valid patch received from model
+                            op = patch.get("op")
+                            if op == "done":
+                                logger.info("✅ Model emitted done patch")
+                            elif op == "set":
+                                logger.info(f"📝 Model set: {patch.get('field')} = {str(patch.get('value'))[:50]}...")
+                            elif op == "append":
+                                logger.info(f"➕ Model append: {patch.get('field')} += {str(patch.get('value'))[:50]}...")
+                            
                         except json.JSONDecodeError as e:
                             logger.warning(
                                 f"Failed to parse NDJSON line: {line[:100]}... Error: {e}"
@@ -474,10 +546,51 @@ Rules:
             # Wait for generation to complete
             generation_thread.join()
 
+            logger.info(
+                f"🏁 Model generation completed: {token_count} tokens, "
+                f"done_received={done_received}"
+            )
+
+            # If the model never emitted {"op":"done"} OR left required fields missing,
+            # run a fallback to fill the gaps and emit synthetic patch events.
+            required_fields = ["title", "main_summary", "category", "sentiment", "read_time_min"]
+            missing_required = [f for f in required_fields if state.get(f) is None]
+
+            if missing_required:
+                logger.warning(
+                    f"V4 NDJSON: Missing required fields from model: {missing_required}. "
+                    "Applying fallback to fill missing values."
+                )
+
+                # Use fallback to fill in missing fields in-place
+                state = self._fallback_fill_missing_fields(text, state)
+
+                # For each field that was missing, emit a synthetic 'set' patch
+                for field in missing_required:
+                    patch = {
+                        "op": "set",
+                        "field": field,
+                        "value": state.get(field),
+                    }
+
+                    # Apply patch (for consistency) and yield it as an event
+                    _ = self._apply_patch(state, patch)
+
+                    logger.info(
+                        f"🔧 Fallback generated: {field} = {str(state.get(field))[:80]}..."
+                    )
+
+                    yield {
+                        "delta": patch,
+                        "state": dict(state),
+                        "done": False,
+                        "tokens_used": token_count,
+                    }
+
             # Compute latency
             latency_ms = (time.time() - start_time) * 1000.0
 
-            # Emit final event (useful even if done_received for latency tracking)
+            # Emit final event (always mark done=True here)
             yield {
                 "delta": None,
                 "state": dict(state),
@@ -485,6 +598,16 @@ Rules:
                 "tokens_used": token_count,
                 "latency_ms": round(latency_ms, 2),
             }
+
+            logger.info(
+                f"✅ V4 NDJSON summarization completed in {latency_ms:.2f}ms. "
+                f"Fields: title={'✅' if state.get('title') else '❌'}, "
+                f"summary={'✅' if state.get('main_summary') else '❌'}, "
+                f"category={'✅' if state.get('category') else '❌'}, "
+                f"sentiment={'✅' if state.get('sentiment') else '❌'}, "
+                f"read_time={'✅' if state.get('read_time_min') else '❌'}, "
+                f"key_points={len(state.get('key_points', []))} items"
+            )
 
             logger.info(f"✅ V4 NDJSON summarization completed in {latency_ms:.2f}ms")
 
