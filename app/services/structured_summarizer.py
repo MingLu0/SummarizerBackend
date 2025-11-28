@@ -538,14 +538,12 @@ Rules:
                 self.tokenizer, skip_prompt=True, skip_special_tokens=True
             )
 
-            # Generation kwargs with sampling for speed (5-10x faster than greedy)
+            # Generation kwargs with greedy decoding for maximum speed
             gen_kwargs = {
                 **inputs,
                 "streamer": streamer,
                 "max_new_tokens": max_new_tokens,
-                "do_sample": True,
-                "temperature": 0.3,
-                "top_p": 0.9,
+                "do_sample": False,
                 "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
                 "eos_token_id": self.tokenizer.eos_token_id,
             }
@@ -553,9 +551,7 @@ Rules:
             # DEBUG: Log generation config
             logger.info(f"🎛️ Generation config:")
             logger.info(f"  max_new_tokens: {max_new_tokens}")
-            logger.info(f"  do_sample: True (sampling for speed)")
-            logger.info(f"  temperature: 0.3 (low for focused output)")
-            logger.info(f"  top_p: 0.9")
+            logger.info(f"  do_sample: False (greedy decoding for speed)")
             logger.info(f"  eos_token_id: {self.tokenizer.eos_token_id}")
             logger.info(f"  pad_token_id: {gen_kwargs['pad_token_id']}")
 
