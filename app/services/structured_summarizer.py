@@ -444,6 +444,14 @@ Rules:
             # Build prompt
             full_prompt = self._build_prompt(text, style)
 
+            # DEBUG: Log the actual prompt being sent to model
+            logger.info("=" * 80)
+            logger.info("🔍 DEBUG: Full prompt being sent to model:")
+            logger.info(f"Prompt length: {len(full_prompt)} chars")
+            logger.info(f"First 500 chars:\n{full_prompt[:500]}")
+            logger.info(f"Last 200 chars:\n{full_prompt[-200:]}")
+            logger.info("=" * 80)
+
             # Tokenize
             inputs = self.tokenizer(full_prompt, return_tensors="pt")
             inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
@@ -467,6 +475,13 @@ Rules:
                 "eos_token_id": self.tokenizer.eos_token_id,
             }
 
+            # DEBUG: Log generation config
+            logger.info(f"🎛️ Generation config:")
+            logger.info(f"  max_new_tokens: {max_new_tokens}")
+            logger.info(f"  do_sample: False (deterministic)")
+            logger.info(f"  eos_token_id: {self.tokenizer.eos_token_id}")
+            logger.info(f"  pad_token_id: {gen_kwargs['pad_token_id']}")
+
             # Start generation in background thread
             generation_thread = threading.Thread(
                 target=self.model.generate, kwargs=gen_kwargs, daemon=True
@@ -485,6 +500,9 @@ Rules:
                     token_count += 1
                     buffer += text_chunk
 
+                    # DEBUG: Log every raw token chunk
+                    logger.debug(f"🔤 Token #{token_count}: {repr(text_chunk)}")
+
                     # Process complete lines
                     while "\n" in buffer:
                         line, buffer = buffer.split("\n", 1)
@@ -492,6 +510,9 @@ Rules:
 
                         if not line:
                             continue
+
+                        # DEBUG: Log every line BEFORE filtering
+                        logger.info(f"📄 Raw line (at token #{token_count}): {line[:100]}...")
 
                         # Heuristic: skip anything that clearly isn't a JSON patch object
                         # This filters out lines like "#include <bits/stdc++.h>" or random prose.
@@ -545,6 +566,12 @@ Rules:
 
             # Wait for generation to complete
             generation_thread.join()
+
+            # DEBUG: Log what's left in the buffer (partial line)
+            if buffer.strip():
+                logger.warning(f"🗑️ Unparsed buffer remaining: {repr(buffer[:200])}")
+            else:
+                logger.info("✅ Buffer was fully consumed (no partial lines)")
 
             logger.info(
                 f"🏁 Model generation completed: {token_count} tokens, "
