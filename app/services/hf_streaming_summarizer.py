@@ -152,7 +152,8 @@ class HFStreamingSummarizer:
     def _generate_test(self, prompt: str):
         """Test generation for warmup."""
         inputs = self.tokenizer(prompt, return_tensors="pt")
-        inputs = inputs.to(self.model.device)
+        # Move inputs to model device (handle BatchEncoding properly)
+        inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
 
         with torch.no_grad():
             _ = self.model.generate(
@@ -329,9 +330,11 @@ class HFStreamingSummarizer:
                     "SingletonBatchEnforceFailed: input_ids batch dimension != 1"
                 )
 
-            # IMPORTANT: with device_map="auto", let HF move tensors as needed.
-            # If you are *not* using device_map="auto", uncomment the line below:
-            # inputs = {k: v.to(self.model.device) for k, v in inputs.items()}
+            # Move inputs to model device (required even with device_map="auto")
+            # For encoder-decoder models, inputs need to be on the encoder device
+            model_device = next(self.model.parameters()).device
+            inputs = {k: v.to(model_device) if isinstance(v, torch.Tensor) else v 
+                     for k, v in inputs.items()}
 
             # Validate pad/eos ids
             pad_id = self.tokenizer.pad_token_id
@@ -699,7 +702,8 @@ class HFStreamingSummarizer:
                 test_input_text = "This is a test article."
 
             test_input = self.tokenizer(test_input_text, return_tensors="pt")
-            test_input = test_input.to(self.model.device)
+            # Move inputs to model device (handle BatchEncoding properly)
+            test_input = {k: v.to(self.model.device) for k, v in test_input.items()}
 
             with torch.no_grad():
                 _ = self.model.generate(
