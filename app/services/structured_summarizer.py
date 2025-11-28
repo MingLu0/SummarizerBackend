@@ -194,13 +194,13 @@ class StructuredSummarizer:
 Each line MUST be a single JSON object. Do NOT output any text that is not valid JSON.
 Do NOT add markdown code fences, comments, or explanations.
 
-Your goal is to produce a structured summary of an article in the following logical shape:
+Your goal is to produce a BRIEF, CONCISE structured summary of an article in the following logical shape:
 {
-    "title": string,
-    "main_summary": string,
-    "key_points": string[],
-    "category": string,
-    "sentiment": string,    // one of ["positive", "negative", "neutral"]
+    "title": string,         // 8-12 words max
+    "main_summary": string,  // 2-3 sentences max
+    "key_points": string[],  // 3-5 items, each 10-15 words
+    "category": string,      // 1-2 words (e.g. "Tech", "Politics")
+    "sentiment": string,     // one of ["positive", "negative", "neutral"]
     "read_time_min": number
 }
 
@@ -211,7 +211,7 @@ Patch formats:
 1) Set or overwrite a scalar field (title, main_summary, category, sentiment, read_time_min):
    {"op": "set", "field": "<field_name>", "value": <value>}
    Examples:
-   {"op": "set", "field": "title", "value": "Qwen2.5-0.5B in a Nutshell"}
+   {"op": "set", "field": "title", "value": "AI Model Breakthrough"}
    {"op": "set", "field": "category", "value": "Tech"}
    {"op": "set", "field": "sentiment", "value": "neutral"}
    {"op": "set", "field": "read_time_min", "value": 3}
@@ -219,27 +219,27 @@ Patch formats:
 2) Append a key point to the key_points array:
    {"op": "append", "field": "key_points", "value": "<one concise key fact>"}
    Example:
-   {"op": "append", "field": "key_points", "value": "It is a 0.5B parameter model optimised for efficiency."}
+   {"op": "append", "field": "key_points", "value": "New 0.5B parameter model optimized for efficiency."}
 
 3) At the very end, output exactly one final line to signal completion:
    {"op": "done"}
 
 Rules:
 - You MUST always set all scalar fields before finishing:
-  1) First patch: {"op": "set", "field": "title", ...}
-  2) Second patch: {"op": "set", "field": "main_summary", ...}
-  3) Third patch: {"op": "set", "field": "category", ...}
+  1) First patch: {"op": "set", "field": "title", ...} [8-12 words]
+  2) Second patch: {"op": "set", "field": "main_summary", ...} [2-3 sentences]
+  3) Third patch: {"op": "set", "field": "category", ...} [1-2 words]
   4) Fourth patch: {"op": "set", "field": "sentiment", ...}
   5) Fifth patch: {"op": "set", "field": "read_time_min", ...}
-  6) Then emit multiple {"op": "append", "field": "key_points", ...} patches (at least 5).
-  7) Only AFTER all these fields are set and at least 5 key_points have been appended,
+  6) Then emit {"op": "append", "field": "key_points", ...} patches (3-5 items, each 10-15 words).
+  7) Only AFTER all fields are set and 3-5 key_points have been appended,
      output exactly one final line: {"op": "done"}.
 - NEVER output {"op": "done"} if any of title, main_summary, category,
   sentiment or read_time_min is missing or null.
 - Output ONLY these JSON patch objects, one per line (NDJSON).
 - Never wrap them in an outer array.
 - Do NOT output the final combined object; only the patches.
-- Keep text concise and factual."""
+- CRITICAL: Keep ALL text BRIEF and CONCISE. No verbose explanations."""
 
     def _build_style_instruction(self, style: str) -> str:
         """Build the style-specific instruction."""
@@ -531,13 +531,14 @@ Rules:
                 self.tokenizer, skip_prompt=True, skip_special_tokens=True
             )
 
-            # Generation kwargs with deterministic decoding
+            # Generation kwargs with sampling for speed (5-10x faster than greedy)
             gen_kwargs = {
                 **inputs,
                 "streamer": streamer,
                 "max_new_tokens": max_new_tokens,
-                "do_sample": False,
-                "temperature": 0.0,
+                "do_sample": True,
+                "temperature": 0.3,
+                "top_p": 0.9,
                 "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
                 "eos_token_id": self.tokenizer.eos_token_id,
             }
@@ -545,7 +546,9 @@ Rules:
             # DEBUG: Log generation config
             logger.info(f"🎛️ Generation config:")
             logger.info(f"  max_new_tokens: {max_new_tokens}")
-            logger.info(f"  do_sample: False (deterministic)")
+            logger.info(f"  do_sample: True (sampling for speed)")
+            logger.info(f"  temperature: 0.3 (low for focused output)")
+            logger.info(f"  top_p: 0.9")
             logger.info(f"  eos_token_id: {self.tokenizer.eos_token_id}")
             logger.info(f"  pad_token_id: {gen_kwargs['pad_token_id']}")
 

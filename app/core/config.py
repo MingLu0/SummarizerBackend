@@ -112,7 +112,7 @@ class Settings(BaseSettings):
         description="Model ID for V4 structured output (1.5B params, fits HF 16GB limit)",
     )
     v4_max_tokens: int = Field(
-        default=1024, env="V4_MAX_TOKENS", ge=128, le=2048, description="Max tokens for V4 generation"
+        default=512, env="V4_MAX_TOKENS", ge=128, le=2048, description="Max tokens for V4 generation"
     )
     v4_temperature: float = Field(
         default=0.2, env="V4_TEMPERATURE", ge=0.0, le=2.0, description="Temperature for V4 (low for stable JSON)"
