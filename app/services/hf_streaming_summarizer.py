@@ -619,6 +619,13 @@ class HFStreamingSummarizer:
 
             inputs = _to_singleton_batch(inputs)
 
+            # Move inputs to model device (required when model is on CUDA)
+            model_device = next(self.model.parameters()).device
+            inputs = {
+                k: v.to(model_device) if isinstance(v, torch.Tensor) else v
+                for k, v in inputs.items()
+            }
+
             # Validate pad/eos ids
             pad_id = self.tokenizer.pad_token_id
             eos_id = self.tokenizer.eos_token_id
