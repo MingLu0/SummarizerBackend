@@ -196,10 +196,10 @@ Do NOT add markdown code fences, comments, or explanations.
 
 Your goal is to produce a BRIEF, CONCISE structured summary of an article in the following logical shape:
 {
-    "title": string,         // 8-12 words max
-    "main_summary": string,  // 2-3 sentences max
-    "key_points": string[],  // 3-5 items, each 10-15 words
-    "category": string,      // 1-2 words (e.g. "Tech", "Politics")
+    "title": string,         // 6-10 words MAX (e.g. "Couple Found Not Guilty in Homicide Case")
+    "main_summary": string,  // 2 sentences MAX (be extremely brief)
+    "key_points": string[],  // 3-5 items, each 8-12 words MAX
+    "category": string,      // 1-2 words ONLY (e.g. "Crime", "Tech", "Politics")
     "sentiment": string,     // one of ["positive", "negative", "neutral"]
     "read_time_min": number
 }
@@ -210,28 +210,30 @@ Patch formats:
 
 1) Set or overwrite a scalar field (title, main_summary, category, sentiment, read_time_min):
    {"op": "set", "field": "<field_name>", "value": <value>}
-   Examples:
+   Examples (NOTE: Keep titles SHORT):
+   {"op": "set", "field": "title", "value": "Couple Acquitted in Homicide Case"}
    {"op": "set", "field": "title", "value": "AI Model Breakthrough"}
-   {"op": "set", "field": "category", "value": "Tech"}
+   {"op": "set", "field": "category", "value": "Crime"}
    {"op": "set", "field": "sentiment", "value": "neutral"}
    {"op": "set", "field": "read_time_min", "value": 3}
 
 2) Append a key point to the key_points array:
    {"op": "append", "field": "key_points", "value": "<one concise key fact>"}
-   Example:
-   {"op": "append", "field": "key_points", "value": "New 0.5B parameter model optimized for efficiency."}
+   Examples (NOTE: Keep each point SHORT):
+   {"op": "append", "field": "key_points", "value": "Couple found not guilty of murder charges."}
+   {"op": "append", "field": "key_points", "value": "New model optimized for efficiency."}
 
 3) At the very end, output exactly one final line to signal completion:
    {"op": "done"}
 
 Rules:
 - You MUST always set all scalar fields before finishing:
-  1) First patch: {"op": "set", "field": "title", ...} [8-12 words]
-  2) Second patch: {"op": "set", "field": "main_summary", ...} [2-3 sentences]
-  3) Third patch: {"op": "set", "field": "category", ...} [1-2 words]
+  1) First patch: {"op": "set", "field": "title", ...} [6-10 words MAX - be SHORT!]
+  2) Second patch: {"op": "set", "field": "main_summary", ...} [2 sentences MAX]
+  3) Third patch: {"op": "set", "field": "category", ...} [1-2 words ONLY]
   4) Fourth patch: {"op": "set", "field": "sentiment", ...}
   5) Fifth patch: {"op": "set", "field": "read_time_min", ...}
-  6) Then emit {"op": "append", "field": "key_points", ...} patches (3-5 items, each 10-15 words).
+  6) Then emit {"op": "append", "field": "key_points", ...} patches (3-5 items, each 8-12 words MAX).
   7) Only AFTER all fields are set and 3-5 key_points have been appended,
      output exactly one final line: {"op": "done"}.
 - NEVER output {"op": "done"} if any of title, main_summary, category,
@@ -239,7 +241,12 @@ Rules:
 - Output ONLY these JSON patch objects, one per line (NDJSON).
 - Never wrap them in an outer array.
 - Do NOT output the final combined object; only the patches.
-- CRITICAL: Keep ALL text BRIEF and CONCISE. No verbose explanations."""
+- CRITICAL BREVITY RULES:
+  * Title MUST be 6-10 words. If longer, shorten it!
+  * Main summary MUST be 2 sentences maximum.
+  * Each key point MUST be 8-12 words maximum.
+  * Category MUST be 1-2 words only.
+  * NO verbose explanations. NO long descriptions. BE BRIEF!"""
 
     def _build_style_instruction(self, style: str) -> str:
         """Build the style-specific instruction."""
@@ -637,9 +644,34 @@ Rules:
             # Wait for generation to complete
             generation_thread.join()
 
-            # DEBUG: Log what's left in the buffer (partial line)
+            # Process any remaining buffer content (might contain {"op": "done"})
             if buffer.strip():
-                logger.warning(f"🗑️ Unparsed buffer remaining: {repr(buffer[:200])}")
+                logger.info(f"📦 Processing remaining buffer: {repr(buffer[:200])}")
+                # Try to parse the remaining buffer as a complete JSON object
+                buffer_cleaned = buffer.strip()
+                if buffer_cleaned.startswith("{") and "op" in buffer_cleaned:
+                    try:
+                        patch = json.loads(buffer_cleaned)
+                        is_done = self._apply_patch(state, patch)
+                        if is_done:
+                            done_received = True
+                            yield {
+                                "delta": patch,
+                                "state": dict(state),
+                                "done": True,
+                                "tokens_used": token_count,
+                            }
+                        else:
+                            yield {
+                                "delta": patch,
+                                "state": dict(state),
+                                "done": False,
+                                "tokens_used": token_count,
+                            }
+                    except json.JSONDecodeError:
+                        logger.warning(f"⚠️ Could not parse remaining buffer as JSON: {buffer_cleaned[:100]}")
+                else:
+                    logger.warning(f"🗑️ Unparsed buffer remaining (not JSON): {repr(buffer[:200])}")
             else:
                 logger.info("✅ Buffer was fully consumed (no partial lines)")
 
