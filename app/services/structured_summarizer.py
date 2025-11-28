@@ -13,6 +13,23 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+# CRITICAL: Patch getpass.getuser() before importing bitsandbytes or transformers
+# HF Spaces containers don't have UID 1000 in /etc/passwd, causing KeyError
+import getpass
+import os
+
+_original_getuser = getpass.getuser
+
+def _mock_getuser():
+    """Mock getuser for HF Spaces compatibility."""
+    try:
+        return _original_getuser()
+    except KeyError:
+        # Fallback for containerized environments without proper user database
+        return os.environ.get("USER", os.environ.get("USERNAME", "user"))
+
+getpass.getuser = _mock_getuser
+
 # Try to import transformers
 try:
     import torch

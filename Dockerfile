@@ -5,6 +5,8 @@ FROM python:3.9-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
+    HOME=/tmp \
+    USER=user \
     ENABLE_V1_WARMUP=false \
     ENABLE_V2_WARMUP=false \
     ENABLE_V4_WARMUP=true \
