@@ -262,7 +262,15 @@ Rules:
   * Main summary MUST be 2 sentences maximum.
   * Each key point MUST be 8-12 words maximum.
   * Category MUST be 1-2 words only.
-  * NO verbose explanations. NO long descriptions. BE BRIEF!"""
+  * NO verbose explanations. NO long descriptions. BE BRIEF!
+
+- CRITICAL JSON FORMATTING RULES:
+  * ALL string values MUST have quotes properly escaped.
+  * If a value contains a quote character, escape it as \\"
+  * Example: "value": "TVNZ\\'s legacy" (escape the apostrophe/quote)
+  * NEVER output unescaped quotes inside JSON string values.
+  * Each JSON object MUST be on a single line and be valid JSON.
+  * Test your JSON - it must parse correctly!"""
 
     def _build_style_instruction(self, style: str) -> str:
         """Build the style-specific instruction."""
@@ -612,6 +620,7 @@ Rules:
                             continue
 
                         # Try to parse JSON patch
+                        patch = None
                         try:
                             patch = json.loads(line)
                             
@@ -626,9 +635,65 @@ Rules:
                             
                         except json.JSONDecodeError as e:
                             logger.warning(
-                                f"Failed to parse NDJSON line: {line[:100]}... Error: {e}"
+                                f"Failed to parse NDJSON line: {line[:150]}... Error: {e}"
                             )
-                            continue
+                            # Try to extract valid JSON from the line
+                            # Common issues: incomplete lines, unescaped quotes, extra text
+                            try:
+                                # Strategy 1: Try to find the first complete JSON object
+                                brace_count = 0
+                                end_pos = -1
+                                for i, char in enumerate(line):
+                                    if char == '{':
+                                        brace_count += 1
+                                    elif char == '}':
+                                        brace_count -= 1
+                                        if brace_count == 0:
+                                            end_pos = i + 1
+                                            break
+                                
+                                if end_pos > 0:
+                                    # Found a complete JSON object, try parsing just that part
+                                    try:
+                                        patch = json.loads(line[:end_pos])
+                                        logger.info(f"✅ Extracted valid JSON from incomplete line")
+                                    except:
+                                        pass
+                                
+                                # Strategy 2: If still failed, try to fix common quote issues
+                                if patch is None and '"value":"' in line:
+                                    # Try to escape unescaped quotes in the value field
+                                    import re
+                                    # Simple heuristic: if we see a pattern like "value":"...text with 'quote'..."
+                                    # try to escape the inner quotes
+                                    def try_fix_quotes(text):
+                                        # Try to find and close the value string properly
+                                        match = re.match(r'(\{"op":"[^"]+","field":"[^"]+","value":")(.*?)(.*)$', text)
+                                        if match:
+                                            prefix = match.group(1)
+                                            value_content = match.group(2)
+                                            rest = match.group(3)
+                                            # Escape any unescaped quotes in the value
+                                            value_content = value_content.replace('\\"', '__TEMP__')
+                                            value_content = value_content.replace('"', '\\"')
+                                            value_content = value_content.replace('__TEMP__', '\\"')
+                                            # Try to reconstruct: prefix + escaped_value + "}"
+                                            if rest.startswith('"}'):
+                                                try:
+                                                    return json.loads(prefix + value_content + rest)
+                                                except:
+                                                    pass
+                                        return None
+                                    
+                                    repaired = try_fix_quotes(line)
+                                    if repaired:
+                                        patch = repaired
+                                        logger.info(f"✅ Repaired JSON by escaping quotes")
+                            except Exception as repair_error:
+                                logger.debug(f"JSON repair attempt failed: {repair_error}")
+                            
+                            if patch is None:
+                                continue
 
                         # Apply patch to state
                         is_done = self._apply_patch(state, patch)
