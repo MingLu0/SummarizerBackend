@@ -81,10 +81,14 @@ class StructuredSummarizer:
                 logger.info("CUDA is NOT available. V4 model will run on CPU.")
 
             # ------------------------------------------------------------------
-            # Preferred path: 4-bit NF4 on GPU via bitsandbytes
+            # Preferred path: 4-bit NF4 on GPU via bitsandbytes (memory efficient)
+            # OR FP16 for speed (2-3x faster, uses more memory)
             # ------------------------------------------------------------------
+            use_fp16_for_speed = getattr(settings, "v4_use_fp16_for_speed", False)
+            
             if (
                 use_cuda
+                and not use_fp16_for_speed
                 and getattr(settings, "v4_enable_quantization", True)
                 and HAS_BITSANDBYTES
             ):
@@ -104,6 +108,18 @@ class StructuredSummarizer:
                     trust_remote_code=True,
                 )
                 quantization_desc = "4-bit NF4 (bitsandbytes, GPU)"
+            
+            elif use_cuda and use_fp16_for_speed:
+                # Use FP16 for 2-3x faster inference (uses ~2-3GB GPU memory)
+                logger.info("Loading V4 model in FP16 for maximum speed (2-3x faster than 4-bit)...")
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    settings.v4_model_id,
+                    torch_dtype=torch.float16,
+                    device_map="auto",
+                    cache_dir=settings.hf_cache_dir,
+                    trust_remote_code=True,
+                )
+                quantization_desc = "FP16 (GPU, fast)"
 
             else:
                 # ------------------------------------------------------------------

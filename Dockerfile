@@ -12,6 +12,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     ENABLE_V4_WARMUP=true \
     V4_MODEL_ID=Qwen/Qwen2.5-1.5B-Instruct \
     V4_ENABLE_QUANTIZATION=true \
+    V4_USE_FP16_FOR_SPEED=true \
     HF_HOME=/tmp/huggingface \
     TRANSFORMERS_NO_TORCHAO=1
 

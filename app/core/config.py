@@ -122,6 +122,11 @@ class Settings(BaseSettings):
         env="V4_ENABLE_QUANTIZATION",
         description="Enable INT8 quantization for V4 model (reduces memory from ~2GB to ~1GB). Quantization takes ~1-2 minutes on startup.",
     )
+    v4_use_fp16_for_speed: bool = Field(
+        default=False,
+        env="V4_USE_FP16_FOR_SPEED",
+        description="Use FP16 instead of 4-bit quantization for 2-3x faster inference (uses ~2-3GB GPU memory instead of ~1GB)",
+    )
 
     @validator("log_level")
     def validate_log_level(cls, v):
