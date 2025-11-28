@@ -1,14 +1,17 @@
-# Hugging Face Spaces compatible Dockerfile - V2 Only
+# Hugging Face Spaces compatible Dockerfile - V4 GPU INT4
 FROM python:3.9-slim
 
-# Set environment variables for V2-only deployment
+# Set environment variables for V4 GPU deployment
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     ENABLE_V1_WARMUP=false \
-    ENABLE_V2_WARMUP=true \
-    HF_MODEL_ID=sshleifer/distilbart-cnn-6-6 \
-    HF_HOME=/tmp/huggingface
+    ENABLE_V2_WARMUP=false \
+    ENABLE_V4_WARMUP=true \
+    V4_MODEL_ID=Qwen/Qwen2.5-1.5B-Instruct \
+    V4_ENABLE_QUANTIZATION=true \
+    HF_HOME=/tmp/huggingface \
+    TRANSFORMERS_NO_TORCHAO=1
 
 # Set work directory
 WORKDIR /app
@@ -38,5 +41,5 @@ EXPOSE 7860
 HEALTHCHECK --interval=30s --timeout=30s --start-period=60s --retries=3 \
     CMD curl -f http://localhost:7860/health || exit 1
 
-# Simple startup - V2 model will download during warmup
+# Simple startup - V4 model will download during warmup (with GPU INT4 quantization)
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "7860"]

@@ -1,5 +1,5 @@
 """
-V4 Structured Summarization Service using Phi-3 and TextIteratorStreamer.
+V4 Structured Summarization Service using Qwen-1.5B.
 """
 
 import asyncio
@@ -23,12 +23,20 @@ except ImportError:
     TRANSFORMERS_AVAILABLE = False
     logger.warning("Transformers library not available. V4 endpoints will be disabled.")
 
+# Try bitsandbytes 4-bit config
+try:
+    from transformers import BitsAndBytesConfig
+
+    HAS_BITSANDBYTES = True
+except ImportError:
+    HAS_BITSANDBYTES = False
+
 
 class StructuredSummarizer:
-    """Service for streaming structured summarization using Phi-3."""
+    """Service for streaming structured summarization using Qwen-1.5B."""
 
     def __init__(self):
-        """Initialize the Phi-3 model and tokenizer."""
+        """Initialize the Qwen model and tokenizer with GPU/INT4 when possible."""
         self.tokenizer: Optional[AutoTokenizer] = None
         self.model: Optional[AutoModelForCausalLM] = None
 
@@ -46,40 +54,82 @@ class StructuredSummarizer:
                 trust_remote_code=True,
             )
 
-            # Load model first (without quantization)
-            self.model = AutoModelForCausalLM.from_pretrained(
-                settings.v4_model_id,
-                torch_dtype=torch.float32,  # Base dtype for CPU
-                device_map="auto",
-                cache_dir=settings.hf_cache_dir,
-                trust_remote_code=True,
-            )
+            # Decide device / quantization strategy
+            use_cuda = torch.cuda.is_available()
+            quantization_desc = "None"
 
-            # Apply post-loading quantization if enabled
-            quantization_enabled = False
-            if settings.v4_enable_quantization:
-                try:
-                    logger.info("Applying INT8 dynamic quantization to V4 model...")
-                    # Quantize all Linear layers to INT8
-                    self.model = torch.quantization.quantize_dynamic(
-                        self.model, {torch.nn.Linear}, dtype=torch.qint8
-                    )
-                    quantization_enabled = True
-                    logger.info("✅ INT8 dynamic quantization applied successfully")
-                except Exception as quant_error:
-                    logger.warning(
-                        f"⚠️ Quantization failed: {quant_error}. Using FP32 model instead."
-                    )
-                    quantization_enabled = False
+            if use_cuda:
+                logger.info("CUDA is available. Using GPU for V4 model.")
+            else:
+                logger.info("CUDA is NOT available. V4 model will run on CPU.")
+
+            # ------------------------------------------------------------------
+            # Preferred path: 4-bit NF4 on GPU via bitsandbytes
+            # ------------------------------------------------------------------
+            if (
+                use_cuda
+                and getattr(settings, "v4_enable_quantization", True)
+                and HAS_BITSANDBYTES
+            ):
+                logger.info("Applying 4-bit NF4 quantization (bitsandbytes) to V4 model...")
+                quant_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_use_double_quant=True,
+                )
+
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    settings.v4_model_id,
+                    device_map="auto",
+                    quantization_config=quant_config,
+                    cache_dir=settings.hf_cache_dir,
+                    trust_remote_code=True,
+                )
+                quantization_desc = "4-bit NF4 (bitsandbytes, GPU)"
+
+            else:
+                # ------------------------------------------------------------------
+                # Fallback path:
+                #   - GPU without bitsandbytes  -> FP16
+                #   - CPU                        -> FP32 + optional dynamic INT8
+                # ------------------------------------------------------------------
+                base_dtype = torch.float16 if use_cuda else torch.float32
+                logger.info(
+                    "Loading V4 model without 4-bit bitsandbytes. "
+                    f"Base dtype: {base_dtype}"
+                )
+
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    settings.v4_model_id,
+                    torch_dtype=base_dtype,
+                    device_map="auto" if use_cuda else None,
+                    cache_dir=settings.hf_cache_dir,
+                    trust_remote_code=True,
+                )
+
+                # Optional dynamic INT8 quantization on CPU
+                if getattr(settings, "v4_enable_quantization", True) and not use_cuda:
+                    try:
+                        logger.info("Applying dynamic INT8 quantization to V4 model on CPU...")
+                        self.model = torch.quantization.quantize_dynamic(
+                            self.model, {torch.nn.Linear}, dtype=torch.qint8
+                        )
+                        quantization_desc = "INT8 dynamic (CPU)"
+                    except Exception as quant_error:
+                        logger.warning(
+                            f"⚠️ CPU INT8 quantization failed: {quant_error}. Using base dtype instead."
+                        )
+                        quantization_desc = f"None ({base_dtype})"
+                else:
+                    quantization_desc = f"None ({base_dtype})"
 
             # Set model to eval mode
             self.model.eval()
 
             logger.info("✅ V4 model initialized successfully")
             logger.info(f"   Model ID: {settings.v4_model_id}")
-            logger.info(
-                f"   Quantization: {'INT8 (~4GB)' if quantization_enabled else 'None (FP32, ~15GB)'}"
-            )
+            logger.info(f"   Quantization: {quantization_desc}")
             logger.info(f"   Model device: {next(self.model.parameters()).device}")
             logger.info(f"   Torch dtype: {next(self.model.parameters()).dtype}")
 
