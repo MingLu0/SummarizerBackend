@@ -29,7 +29,9 @@ COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt && \
+    python -c "import outlines; print(f'✅ Outlines installed: {outlines.__version__ if hasattr(outlines, \"__version__\") else \"version unknown\"}')" || \
+    (echo "❌ Outlines installation failed!" && pip list | grep -i outline && exit 1)
 
 # Copy application code
 COPY app/ ./app/
