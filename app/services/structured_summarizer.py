@@ -59,7 +59,8 @@ outlines_generate_json = None
 try:
     import outlines
     # Check what's available in outlines module
-    logger.debug(f"Outlines module attributes: {[attr for attr in dir(outlines) if not attr.startswith('_')]}")
+    available_attrs = [attr for attr in dir(outlines) if not attr.startswith('_')]
+    logger.info(f"Outlines module attributes: {available_attrs}")
     
     # Try to import models
     try:
