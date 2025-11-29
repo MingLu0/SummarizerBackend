@@ -57,23 +57,53 @@ outlines_models = None
 outlines_generate_json = None
 
 try:
-    from outlines import models as outlines_models
-    # Try different import patterns based on Outlines version
+    import outlines
+    # Check what's available in outlines module
+    logger.debug(f"Outlines module attributes: {[attr for attr in dir(outlines) if not attr.startswith('_')]}")
+    
+    # Try to import models
     try:
-        # Pattern 1: Direct import (some versions)
-        from outlines import generate
-        outlines_generate_json = generate.json
+        from outlines import models as outlines_models
     except ImportError:
+        logger.warning("Could not import outlines.models")
+        raise
+    
+    # Try different import patterns for generate.json
+    outlines_generate_json = None
+    
+    # Pattern 1: outlines.generate.json (direct attribute access)
+    try:
+        import outlines.generate as gen_module
+        if hasattr(gen_module, 'json'):
+            outlines_generate_json = gen_module.json
+            logger.info("Found outlines.generate.json via attribute access")
+    except (ImportError, AttributeError):
+        pass
+    
+    # Pattern 2: from outlines.generate import json
+    if outlines_generate_json is None:
         try:
-            # Pattern 2: Submodule import (newer versions)
             from outlines.generate import json as outlines_generate_json
+            logger.info("Found outlines.generate.json via submodule import")
         except ImportError:
-            # Pattern 3: Check if it's a method on the module
-            import outlines
-            if hasattr(outlines, 'generate') and hasattr(outlines.generate, 'json'):
-                outlines_generate_json = outlines.generate.json
-            else:
-                raise ImportError("Could not find outlines.generate.json")
+            pass
+    
+    # Pattern 3: Check if it's on the main module
+    if outlines_generate_json is None:
+        if hasattr(outlines, 'generate') and callable(getattr(outlines.generate, 'json', None)):
+            outlines_generate_json = outlines.generate.json
+            logger.info("Found outlines.generate.json on main module")
+    
+    # Pattern 4: Maybe it's just 'generate' that returns a callable
+    if outlines_generate_json is None:
+        if hasattr(outlines, 'generate'):
+            gen_func = getattr(outlines, 'generate')
+            if callable(gen_func) and hasattr(gen_func, 'json'):
+                outlines_generate_json = gen_func.json
+                logger.info("Found generate.json as attribute of generate function")
+    
+    if outlines_generate_json is None:
+        raise ImportError(f"Could not find generate.json. Available in outlines: {[x for x in dir(outlines) if not x.startswith('_')]}")
     
     OUTLINES_AVAILABLE = True
     logger.info("✅ Outlines library imported successfully")
