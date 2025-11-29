@@ -292,8 +292,25 @@ class StructuredSummarizer:
         # Also warm up Outlines JSON generation
         if OUTLINES_AVAILABLE and self.outlines_model is not None:
             try:
-                dummy_gen = outlines_generate_json(self.outlines_model, StructuredSummary)
-                _ = dummy_gen("Warmup text for Outlines structured summary.")
+                # Try the same pattern as in the streaming method
+                try:
+                    json_gen_func = outlines_generate_json(StructuredSummary)
+                    dummy_gen = json_gen_func(self.outlines_model)
+                except TypeError:
+                    dummy_gen = outlines_generate_json(self.outlines_model, StructuredSummary)
+                
+                # Try to call it
+                try:
+                    result = dummy_gen("Warmup text for Outlines structured summary.")
+                    # Consume the generator if it's a generator
+                    if hasattr(result, '__iter__'):
+                        _ = list(result)[:1]  # Just consume first item for warmup
+                except TypeError:
+                    # Maybe it needs prompt as keyword arg or different pattern
+                    result = dummy_gen.stream("Warmup text") if hasattr(dummy_gen, 'stream') else dummy_gen("Warmup")
+                    if hasattr(result, '__iter__'):
+                        _ = list(result)[:1]
+                
                 logger.info("✅ V4 Outlines JSON warmup successful")
             except Exception as e:
                 logger.warning(f"⚠️ V4 Outlines JSON warmup failed: {e}")
@@ -1000,12 +1017,31 @@ Rules:
                 return
 
             # Create an Outlines generator bound to the StructuredSummary schema
-            json_generator = outlines_generate_json(self.outlines_model, StructuredSummary)
+            # In version 0.0.34, the API might be different - try different patterns
+            try:
+                # Pattern 1: json_schema(schema) returns a function that takes model and prompt
+                json_generator_func = outlines_generate_json(StructuredSummary)
+                json_generator = json_generator_func(self.outlines_model)
+            except TypeError:
+                # Pattern 2: json_schema(model, schema) - original pattern
+                json_generator = outlines_generate_json(self.outlines_model, StructuredSummary)
 
             start_time = time.time()
 
             # Stream tokens; each token is a string fragment of the final JSON object
-            for token in json_generator.stream(prompt):
+            # The generator might have .stream() method or be directly iterable
+            try:
+                # Try .stream() method first
+                token_iter = json_generator.stream(prompt)
+            except AttributeError:
+                # If no .stream(), try calling it directly with prompt
+                try:
+                    token_iter = json_generator(prompt)
+                except TypeError:
+                    # Last resort: maybe it's a generator factory that needs model and prompt
+                    token_iter = json_generator(self.outlines_model, prompt)
+            
+            for token in token_iter:
                 # Each `token` is a raw string fragment; just pass it through
                 if token:
                     yield token
