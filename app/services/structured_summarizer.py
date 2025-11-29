@@ -887,8 +887,15 @@ Rules:
         """
         if not self.outlines_model:
             logger.error("❌ Outlines model not available for V4")
-            # Yield a minimal JSON error object and stop
-            error_obj = {"error": "V4 Outlines model not available."}
+            # Provide detailed error information
+            if not OUTLINES_AVAILABLE:
+                error_msg = "Outlines library not installed. Please install outlines>=0.0.34."
+            elif not self.model or not self.tokenizer:
+                error_msg = "Base V4 model not loaded. Outlines wrapper cannot be created."
+            else:
+                error_msg = "Outlines model wrapper initialization failed. Check server logs for details."
+            
+            error_obj = {"error": "V4 Outlines model not available", "detail": error_msg}
             yield json.dumps(error_obj)
             return
 
