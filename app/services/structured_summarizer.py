@@ -52,15 +52,18 @@ except ImportError:
 from pydantic import BaseModel
 
 # Try to import Outlines for JSON schema enforcement
+OUTLINES_AVAILABLE = False
+outlines_models = None
+outlines_generate = None
+
 try:
     from outlines import models as outlines_models, generate as outlines_generate
-
     OUTLINES_AVAILABLE = True
-except ImportError:
-    OUTLINES_AVAILABLE = False
-    outlines_models = None
-    outlines_generate = None
-    logger.warning("Outlines library not available. V4 JSON streaming endpoints will be disabled.")
+    logger.info("✅ Outlines library imported successfully")
+except ImportError as e:
+    logger.warning(f"Outlines library not available: {e}. V4 JSON streaming endpoints will be disabled.")
+except Exception as e:
+    logger.warning(f"Error importing Outlines library: {e}. V4 JSON streaming endpoints will be disabled.")
 
 
 class StructuredSummary(BaseModel):
