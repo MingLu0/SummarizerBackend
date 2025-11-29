@@ -54,10 +54,27 @@ from pydantic import BaseModel
 # Try to import Outlines for JSON schema enforcement
 OUTLINES_AVAILABLE = False
 outlines_models = None
-outlines_generate = None
+outlines_generate_json = None
 
 try:
-    from outlines import models as outlines_models, generate as outlines_generate
+    from outlines import models as outlines_models
+    # Try different import patterns based on Outlines version
+    try:
+        # Pattern 1: Direct import (some versions)
+        from outlines import generate
+        outlines_generate_json = generate.json
+    except ImportError:
+        try:
+            # Pattern 2: Submodule import (newer versions)
+            from outlines.generate import json as outlines_generate_json
+        except ImportError:
+            # Pattern 3: Check if it's a method on the module
+            import outlines
+            if hasattr(outlines, 'generate') and hasattr(outlines.generate, 'json'):
+                outlines_generate_json = outlines.generate.json
+            else:
+                raise ImportError("Could not find outlines.generate.json")
+    
     OUTLINES_AVAILABLE = True
     logger.info("✅ Outlines library imported successfully")
 except ImportError as e:
@@ -231,7 +248,7 @@ class StructuredSummarizer:
         # Also warm up Outlines JSON generation
         if OUTLINES_AVAILABLE and self.outlines_model is not None:
             try:
-                dummy_gen = outlines_generate.json(self.outlines_model, StructuredSummary)
+                dummy_gen = outlines_generate_json(self.outlines_model, StructuredSummary)
                 _ = dummy_gen("Warmup text for Outlines structured summary.")
                 logger.info("✅ V4 Outlines JSON warmup successful")
             except Exception as e:
@@ -939,7 +956,7 @@ Rules:
                 return
 
             # Create an Outlines generator bound to the StructuredSummary schema
-            json_generator = outlines_generate.json(self.outlines_model, StructuredSummary)
+            json_generator = outlines_generate_json(self.outlines_model, StructuredSummary)
 
             start_time = time.time()
 
