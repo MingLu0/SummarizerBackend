@@ -48,6 +48,30 @@ try:
 except ImportError:
     HAS_BITSANDBYTES = False
 
+# Import Pydantic for schema definition
+from pydantic import BaseModel
+
+# Try to import Outlines for JSON schema enforcement
+try:
+    from outlines import models as outlines_models, generate as outlines_generate
+
+    OUTLINES_AVAILABLE = True
+except ImportError:
+    OUTLINES_AVAILABLE = False
+    outlines_models = None
+    outlines_generate = None
+    logger.warning("Outlines library not available. V4 JSON streaming endpoints will be disabled.")
+
+
+class StructuredSummary(BaseModel):
+    """Pydantic schema for structured summary output."""
+    title: str
+    main_summary: str
+    key_points: list[str]
+    category: str
+    sentiment: str
+    read_time_min: int
+
 
 class StructuredSummarizer:
     """Service for streaming structured summarization using Qwen-1.5B."""
@@ -56,6 +80,7 @@ class StructuredSummarizer:
         """Initialize the Qwen model and tokenizer with GPU/INT4 when possible."""
         self.tokenizer: Optional[AutoTokenizer] = None
         self.model: Optional[AutoModelForCausalLM] = None
+        self.outlines_model = None  # Outlines wrapper over the HF model
 
         if not TRANSFORMERS_AVAILABLE:
             logger.warning("⚠️ Transformers not available - V4 endpoints will not work")
@@ -166,6 +191,18 @@ class StructuredSummarizer:
             logger.info(f"   Model device: {next(self.model.parameters()).device}")
             logger.info(f"   Torch dtype: {next(self.model.parameters()).dtype}")
 
+            # Wrap the HF model + tokenizer in an Outlines Transformers model
+            if OUTLINES_AVAILABLE:
+                try:
+                    self.outlines_model = outlines_models.Transformers(self.model, self.tokenizer)
+                    logger.info("✅ Outlines model wrapper initialized for V4")
+                except Exception as e:
+                    logger.error(f"❌ Failed to initialize Outlines wrapper: {e}")
+                    self.outlines_model = None
+            else:
+                logger.warning("⚠️ Outlines not available - V4 JSON streaming endpoints will be disabled")
+                self.outlines_model = None
+
         except Exception as e:
             logger.error(f"❌ Failed to initialize V4 model: {e}")
             logger.error(f"Model ID: {settings.v4_model_id}")
@@ -187,6 +224,15 @@ class StructuredSummarizer:
             logger.info("✅ V4 model warmup successful")
         except Exception as e:
             logger.error(f"❌ V4 model warmup failed: {e}")
+
+        # Also warm up Outlines JSON generation
+        if OUTLINES_AVAILABLE and self.outlines_model is not None:
+            try:
+                dummy_gen = outlines_generate.json(self.outlines_model, StructuredSummary)
+                _ = dummy_gen("Warmup text for Outlines structured summary.")
+                logger.info("✅ V4 Outlines JSON warmup successful")
+            except Exception as e:
+                logger.warning(f"⚠️ V4 Outlines JSON warmup failed: {e}")
 
     def _generate_test(self, prompt: str):
         """Test generation for warmup."""
@@ -826,6 +872,83 @@ Rules:
                 "tokens_used": 0,
                 "error": "V4 NDJSON summarization failed. See server logs.",
             }
+
+    async def summarize_structured_stream_json(
+        self,
+        text: str,
+        style: str = "executive",
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream a single JSON object (StructuredSummary) token-by-token
+        using Outlines constrained decoding.
+
+        Yields:
+            Raw string tokens that, when concatenated, form a valid JSON object.
+        """
+        if not self.outlines_model:
+            logger.error("❌ Outlines model not available for V4")
+            # Yield a minimal JSON error object and stop
+            error_obj = {"error": "V4 Outlines model not available."}
+            yield json.dumps(error_obj)
+            return
+
+        # Map existing styles to a short instruction
+        style_prompts = {
+            "skimmer": "Summarize concisely using only hard facts and data.",
+            "executive": "Summarize for a CEO. Focus on key facts and business impact. Be concise.",
+            "eli5": "Explain in very simple language with minimal jargon.",
+        }
+        style_instruction = style_prompts.get(style, style_prompts["executive"])
+
+        # Truncate text to prevent token overflow (reuse your existing max_chars idea)
+        max_chars = 10000
+        if len(text) > max_chars:
+            logger.warning(f"Truncating input text from {len(text)} to {max_chars} chars for V4 JSON streaming.")
+            text = text[:max_chars]
+
+        # Build a compact prompt; Outlines will handle the schema, so no huge system prompt needed
+        prompt = (
+            f"{style_instruction}\n\n"
+            f"Produce a JSON object that matches this schema exactly:\n"
+            f"- title: short headline\n"
+            f"- main_summary: 2-4 sentences\n"
+            f"- key_points: 3-5 concise bullet points\n"
+            f"- category: 1-2 word topic label (e.g. 'Crime', 'Tech')\n"
+            f"- sentiment: one of ['positive', 'negative', 'neutral']\n"
+            f"- read_time_min: integer reading time in minutes\n\n"
+            f"ARTICLE:\n{text}"
+        )
+
+        logger.info(f"V4 Outlines JSON streaming: {len(text)} chars, style={style}")
+
+        try:
+            # Check if Outlines is available
+            if not OUTLINES_AVAILABLE:
+                error_obj = {"error": "Outlines library not available. Please install outlines>=0.0.34."}
+                yield json.dumps(error_obj)
+                return
+
+            # Create an Outlines generator bound to the StructuredSummary schema
+            json_generator = outlines_generate.json(self.outlines_model, StructuredSummary)
+
+            start_time = time.time()
+
+            # Stream tokens; each token is a string fragment of the final JSON object
+            for token in json_generator.stream(prompt):
+                # Each `token` is a raw string fragment; just pass it through
+                if token:
+                    yield token
+                    # Let the event loop breathe
+                    await asyncio.sleep(0)
+
+            latency_ms = (time.time() - start_time) * 1000.0
+            logger.info(f"✅ V4 Outlines JSON streaming completed in {latency_ms:.2f}ms")
+
+        except Exception as e:
+            logger.exception("❌ V4 Outlines JSON streaming failed")
+            # Yield a minimal JSON error object as final output
+            error_obj = {"error": "V4 JSON streaming failed", "detail": str(e)}
+            yield json.dumps(error_obj)
 
 
 # Global service instance

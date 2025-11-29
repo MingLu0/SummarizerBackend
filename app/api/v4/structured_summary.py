@@ -301,3 +301,97 @@ async def _stream_generator_ndjson(text: str, payload, metadata: dict, request_i
         logger.info(
             f"[{request_id}] V4 NDJSON text mode completed in {total_latency_ms:.2f}ms"
         )
+
+
+@router.post("/scrape-and-summarize/stream-json")
+async def scrape_and_summarize_stream_json(
+    request: Request, payload: StructuredSummaryRequest
+):
+    """
+    V4: Full JSON structured summarization with streaming using Outlines.
+
+    This endpoint streams a single JSON object token-by-token via SSE.
+    The final concatenated response is a valid JSON matching StructuredSummary.
+    """
+    request_id = getattr(request.state, "request_id", "unknown")
+
+    # Determine input mode (same logic as other endpoints)
+    if payload.url:
+        logger.info(f"[{request_id}] V4 JSON URL mode: {payload.url[:80]}...")
+
+        scrape_start = time.time()
+        try:
+            article_data = await article_scraper_service.scrape_article(
+                url=payload.url, use_cache=payload.use_cache
+            )
+        except Exception as e:
+            logger.error(f"[{request_id}] Scraping failed: {e}")
+            raise HTTPException(
+                status_code=502, detail=f"Failed to scrape article: {str(e)}"
+            )
+
+        scrape_latency_ms = (time.time() - scrape_start) * 1000
+        logger.info(
+            f"[{request_id}] Scraped in {scrape_latency_ms:.2f}ms, "
+            f"extracted {len(article_data['text'])} chars"
+        )
+
+        if len(article_data["text"]) < 100:
+            raise HTTPException(
+                status_code=422,
+                detail="Insufficient content extracted from URL. "
+                "Article may be behind paywall or site may block scrapers.",
+            )
+
+        text_to_summarize = article_data["text"]
+        metadata = {
+            "input_type": "url",
+            "url": payload.url,
+            "title": article_data.get("title"),
+            "author": article_data.get("author"),
+            "date": article_data.get("date"),
+            "site_name": article_data.get("site_name"),
+            "scrape_method": article_data.get("method", "static"),
+            "scrape_latency_ms": scrape_latency_ms,
+            "extracted_text_length": len(article_data["text"]),
+            "style": payload.style.value,
+        }
+    else:
+        logger.info(f"[{request_id}] V4 JSON text mode: {len(payload.text)} chars")
+
+        text_to_summarize = payload.text
+        metadata = {
+            "input_type": "text",
+            "text_length": len(payload.text),
+            "style": payload.style.value,
+        }
+
+    async def _stream_generator_json():
+        # Optional: send metadata as first event
+        if payload.include_metadata:
+            metadata_event = {"type": "metadata", "data": metadata}
+            yield f"data: {json.dumps(metadata_event)}\n\n"
+
+        # Now stream the JSON tokens from the service
+        try:
+            async for token in structured_summarizer_service.summarize_structured_stream_json(
+                text=text_to_summarize,
+                style=payload.style.value,
+            ):
+                # Each token is a raw JSON fragment; just forward it
+                yield f"data: {token}\n\n"
+        except Exception as e:
+            logger.error(f"[{request_id}] V4 JSON streaming failed: {e}")
+            error_event = {"type": "error", "error": str(e), "done": True}
+            yield f"data: {json.dumps(error_event)}\n\n"
+
+    return StreamingResponse(
+        _stream_generator_json(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "X-Request-ID": request_id,
+        },
+    )

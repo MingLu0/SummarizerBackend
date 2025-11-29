@@ -20,6 +20,7 @@ accelerate>=0.33.0,<1.0.0  # Required for GPU quantization (V4)
 bitsandbytes>=0.44.0  # 4-bit NF4 quantization for GPU (V4)
 einops>=0.6.0,<1.0.0  # Required for model architecture (V4)
 scipy>=1.10.0,<2.0.0  # Often needed for unquantized models (V4)
+outlines>=0.0.34  # JSON schema enforcement for V4 structured summarization
 
 # Testing
 pytest>=7.0.0,<8.0.0
