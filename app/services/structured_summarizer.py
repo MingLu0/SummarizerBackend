@@ -139,7 +139,7 @@ class StructuredSummarizer:
                 logger.info("Loading V4 model in FP16 for maximum speed (2-3x faster than 4-bit)...")
                 self.model = AutoModelForCausalLM.from_pretrained(
                     settings.v4_model_id,
-                    torch_dtype=torch.float16,
+                    dtype=torch.float16,
                     device_map="auto",
                     cache_dir=settings.hf_cache_dir,
                     trust_remote_code=True,
@@ -160,7 +160,7 @@ class StructuredSummarizer:
 
                 self.model = AutoModelForCausalLM.from_pretrained(
                     settings.v4_model_id,
-                    torch_dtype=base_dtype,
+                    dtype=base_dtype,
                     device_map="auto" if use_cuda else None,
                     cache_dir=settings.hf_cache_dir,
                     trust_remote_code=True,

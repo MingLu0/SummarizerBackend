@@ -1,5 +1,5 @@
 # Hugging Face Spaces compatible Dockerfile - V4 GPU INT4
-FROM python:3.9-slim
+FROM python:3.10-slim
 
 # Set environment variables for V4 GPU deployment
 ENV PYTHONDONTWRITEBYTECODE=1 \
