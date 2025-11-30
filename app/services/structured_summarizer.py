@@ -54,7 +54,7 @@ from pydantic import BaseModel
 # Try to import Outlines for JSON schema enforcement
 OUTLINES_AVAILABLE = False
 outlines_models = None
-outlines_generate_json = None
+outlines_generate = None
 
 try:
     import outlines
@@ -69,55 +69,16 @@ try:
         logger.warning("Could not import outlines.models")
         raise
     
-    # Try different import patterns for JSON generation
-    # Based on the attributes, we see 'generator' and 'json_schema'
-    outlines_generate_json = None
-    
-    # Pattern 1: outlines.generator.json (most likely based on 'generator' attribute)
+    # Try to import generate module (for outlines.generate.json)
     try:
-        import outlines.generator as gen_module
-        if hasattr(gen_module, 'json'):
-            outlines_generate_json = gen_module.json
-            logger.info("Found outlines.generator.json via generator module")
-    except (ImportError, AttributeError) as e:
-        logger.debug(f"Pattern 1 failed: {e}")
+        from outlines import generate as outlines_generate
+        logger.info("✅ Found outlines.generate module")
+    except ImportError as e:
+        logger.warning(f"Could not import outlines.generate: {e}")
+        outlines_generate = None
     
-    # Pattern 2: from outlines.generator import json
-    if outlines_generate_json is None:
-        try:
-            from outlines.generator import json as outlines_generate_json
-            logger.info("Found outlines.generator.json via submodule import")
-        except ImportError as e:
-            logger.debug(f"Pattern 2 failed: {e}")
-    
-    # Pattern 3: Check if generator is a module on outlines
-    if outlines_generate_json is None:
-        if hasattr(outlines, 'generator'):
-            gen_attr = getattr(outlines, 'generator')
-            if hasattr(gen_attr, 'json'):
-                outlines_generate_json = gen_attr.json
-                logger.info("Found generator.json as attribute")
-    
-    # Pattern 4: Maybe it's outlines.json_schema or similar
-    if outlines_generate_json is None:
-        if hasattr(outlines, 'json_schema'):
-            js_attr = getattr(outlines, 'json_schema')
-            if callable(js_attr):
-                outlines_generate_json = js_attr
-                logger.info("Found json_schema as callable")
-    
-    # Pattern 5: Check if Generator class has a json method
-    if outlines_generate_json is None:
-        if hasattr(outlines, 'Generator'):
-            gen_class = getattr(outlines, 'Generator')
-            if hasattr(gen_class, 'json') or hasattr(gen_class, 'from_json'):
-                # Generator class might have a different API
-                logger.info("Found Generator class, checking for json method")
-                # We'll need to use it differently - this might require model wrapping
-                # For now, let's check if there's a simpler way
-    
-    if outlines_generate_json is None:
-        raise ImportError(f"Could not find generator.json. Available in outlines: {available_attrs[:10]}...")
+    if outlines_generate is None:
+        raise ImportError(f"Could not import outlines.generate. Available in outlines: {available_attrs[:10]}...")
     
     OUTLINES_AVAILABLE = True
     logger.info("✅ Outlines library imported successfully")
@@ -290,26 +251,16 @@ class StructuredSummarizer:
             logger.error(f"❌ V4 model warmup failed: {e}")
 
         # Also warm up Outlines JSON generation
-        if OUTLINES_AVAILABLE and self.outlines_model is not None:
+        if OUTLINES_AVAILABLE and self.outlines_model is not None and outlines_generate is not None:
             try:
-                # Try the same pattern as in the streaming method
-                try:
-                    json_gen_func = outlines_generate_json(StructuredSummary)
-                    dummy_gen = json_gen_func(self.outlines_model)
-                except TypeError:
-                    dummy_gen = outlines_generate_json(self.outlines_model, StructuredSummary)
+                # Use outlines.generate.json(model, schema) pattern
+                json_generator = outlines_generate.json(self.outlines_model, StructuredSummary)
                 
-                # Try to call it
-                try:
-                    result = dummy_gen("Warmup text for Outlines structured summary.")
-                    # Consume the generator if it's a generator
-                    if hasattr(result, '__iter__'):
-                        _ = list(result)[:1]  # Just consume first item for warmup
-                except TypeError:
-                    # Maybe it needs prompt as keyword arg or different pattern
-                    result = dummy_gen.stream("Warmup text") if hasattr(dummy_gen, 'stream') else dummy_gen("Warmup")
-                    if hasattr(result, '__iter__'):
-                        _ = list(result)[:1]
+                # Try to call it with a simple prompt
+                result = json_generator("Warmup text for Outlines structured summary.")
+                # Consume the generator if it's a generator
+                if hasattr(result, '__iter__') and not isinstance(result, str):
+                    _ = list(result)[:1]  # Just consume first item for warmup
                 
                 logger.info("✅ V4 Outlines JSON warmup successful")
             except Exception as e:
@@ -1011,36 +962,22 @@ Rules:
 
         try:
             # Check if Outlines is available
-            if not OUTLINES_AVAILABLE:
+            if not OUTLINES_AVAILABLE or outlines_generate is None:
                 error_obj = {"error": "Outlines library not available. Please install outlines>=0.0.34."}
                 yield json.dumps(error_obj)
                 return
 
-            # Create an Outlines generator bound to the StructuredSummary schema
-            # In version 0.0.34, the API might be different - try different patterns
-            try:
-                # Pattern 1: json_schema(schema) returns a function that takes model and prompt
-                json_generator_func = outlines_generate_json(StructuredSummary)
-                json_generator = json_generator_func(self.outlines_model)
-            except TypeError:
-                # Pattern 2: json_schema(model, schema) - original pattern
-                json_generator = outlines_generate_json(self.outlines_model, StructuredSummary)
-
             start_time = time.time()
 
-            # Stream tokens; each token is a string fragment of the final JSON object
-            # The generator might have .stream() method or be directly iterable
-            try:
-                # Try .stream() method first
-                token_iter = json_generator.stream(prompt)
-            except AttributeError:
-                # If no .stream(), try calling it directly with prompt
-                try:
-                    token_iter = json_generator(prompt)
-                except TypeError:
-                    # Last resort: maybe it's a generator factory that needs model and prompt
-                    token_iter = json_generator(self.outlines_model, prompt)
+            # Create an Outlines generator bound to the StructuredSummary schema
+            # Modern Outlines API: outlines.generate.json(model, schema)
+            json_generator = outlines_generate.json(self.outlines_model, StructuredSummary)
+
+            # Call the generator with the prompt to get streaming tokens
+            # The generator returns an iterable of string tokens
+            token_iter = json_generator(prompt)
             
+            # Stream tokens; each token is a string fragment of the final JSON object
             for token in token_iter:
                 # Each `token` is a raw string fragment; just pass it through
                 if token:
