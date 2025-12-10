@@ -8,7 +8,6 @@ These tests verify:
 """
 
 import asyncio
-import io
 from pathlib import Path
 
 import pytest
@@ -68,9 +67,7 @@ class TestLoguruContext:
 
         log_file = tmp_path / "isolation.log"
         logger.remove()
-        logger.add(
-            log_file, format="{extra[request_id]} | {message}", level="INFO"
-        )
+        logger.add(log_file, format="{extra[request_id]} | {message}", level="INFO")
 
         # Simulate first request
         request_id_var.set("request-1")
@@ -91,9 +88,7 @@ class TestLoguruContext:
 
         log_file = tmp_path / "preservation.log"
         logger.remove()
-        logger.add(
-            log_file, format="{extra[request_id]} | {message}", level="INFO"
-        )
+        logger.add(log_file, format="{extra[request_id]} | {message}", level="INFO")
 
         async def process_with_delay(request_id: str):
             request_id_var.set(request_id)

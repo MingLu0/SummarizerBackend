@@ -10,7 +10,6 @@ These tests verify:
 import json
 from pathlib import Path
 
-import pytest
 from loguru import logger
 
 
@@ -55,7 +54,9 @@ class TestLoguruSetup:
         logger.remove()
         logger.add(log_file, serialize=True, level="INFO")
 
-        logger.bind(field1="value1", field2="value2", field3=123).info("Multi-bind test")
+        logger.bind(field1="value1", field2="value2", field3=123).info(
+            "Multi-bind test"
+        )
 
         with open(log_file) as f:
             log_entry = json.loads(f.readline())

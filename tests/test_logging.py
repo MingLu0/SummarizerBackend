@@ -7,7 +7,6 @@ without using mocks - testing real behavior with Loguru.
 
 from pathlib import Path
 
-import pytest
 from loguru import logger
 
 

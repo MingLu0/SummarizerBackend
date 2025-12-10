@@ -5,7 +5,6 @@ These tests verify observable behavior through the API rather than log output,
 since log output testing is covered by unit tests.
 """
 
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -16,9 +15,7 @@ class TestLoguruIntegration:
         """Verify request ID is preserved in response headers."""
         custom_request_id = "header-preservation-test-456"
 
-        response = client.get(
-            "/health", headers={"X-Request-ID": custom_request_id}
-        )
+        response = client.get("/health", headers={"X-Request-ID": custom_request_id})
 
         assert response.status_code == 200
         assert response.headers["X-Request-ID"] == custom_request_id
@@ -72,7 +69,9 @@ class TestLoguruIntegration:
         # Request ID should still be in headers
         assert response.headers["X-Request-ID"] == custom_request_id
 
-    def test_logging_context_does_not_interfere_with_responses(self, client: TestClient):
+    def test_logging_context_does_not_interfere_with_responses(
+        self, client: TestClient
+    ):
         """Verify logging context doesn't affect normal request/response cycle."""
         # Make several requests to ensure logging doesn't cause issues
         for i in range(5):

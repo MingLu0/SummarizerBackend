@@ -53,7 +53,9 @@ def _serialize_record(record: dict) -> str:
     # Add exception info if present
     if record["exception"]:
         log_entry["exception"] = {
-            "type": record["exception"].type.__name__ if record["exception"].type else None,
+            "type": record["exception"].type.__name__
+            if record["exception"].type
+            else None,
             "value": str(record["exception"].value),
         }
 
@@ -122,9 +124,7 @@ def setup_logging() -> None:
         )
 
     # Log startup configuration
-    logger.info(
-        f"Logging initialized with format={log_format_type}, level={log_level}"
-    )
+    logger.info(f"Logging initialized with format={log_format_type}, level={log_level}")
 
 
 def get_logger(name: str) -> Any:
@@ -176,10 +176,7 @@ class RequestLogger:
         context_request_id = request_id_var.get() or request_id
 
         self.logger.bind(
-            request_id=context_request_id,
-            method=method,
-            path=path,
-            **kwargs
+            request_id=context_request_id, method=method, path=path, **kwargs
         ).info(f"Request {context_request_id}: {method} {path}")
 
     def log_response(
@@ -201,7 +198,7 @@ class RequestLogger:
             request_id=context_request_id,
             status_code=status_code,
             duration_ms=duration_ms,
-            **kwargs
+            **kwargs,
         ).info(f"Response {context_request_id}: {status_code} ({duration_ms:.2f}ms)")
 
     def log_error(self, request_id: str, error: str, **kwargs: Any) -> None:
@@ -216,8 +213,6 @@ class RequestLogger:
         # Get request ID from context var (fallback to parameter)
         context_request_id = request_id_var.get() or request_id
 
-        self.logger.bind(
-            request_id=context_request_id,
-            error=error,
-            **kwargs
-        ).error(f"Error {context_request_id}: {error}")
+        self.logger.bind(request_id=context_request_id, error=error, **kwargs).error(
+            f"Error {context_request_id}: {error}"
+        )
