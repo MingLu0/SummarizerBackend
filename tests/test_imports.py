@@ -70,15 +70,6 @@ class TestExternalDependencies:
         except ImportError:
             pytest.skip("torch not available (optional)")
 
-    def test_outlines_import(self):
-        """Test outlines can be imported."""
-        try:
-            import outlines  # noqa: F401
-
-            assert True
-        except ImportError:
-            pytest.skip("outlines not available (optional)")
-
     def test_trafilatura_import(self):
         """Test trafilatura can be imported."""
         try:
