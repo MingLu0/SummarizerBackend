@@ -4,7 +4,8 @@ Transformers service for fast text summarization using Hugging Face models.
 
 import asyncio
 import time
-from typing import Any, AsyncGenerator, Dict, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from app.core.logging import get_logger
 
@@ -27,7 +28,7 @@ class TransformersSummarizer:
 
     def __init__(self):
         """Initialize the Transformers pipeline with distilbart model."""
-        self.summarizer: Optional[Any] = None
+        self.summarizer: Any | None = None
 
         if not TRANSFORMERS_AVAILABLE:
             logger.warning(
@@ -39,7 +40,9 @@ class TransformersSummarizer:
 
         try:
             self.summarizer = pipeline(
-                "summarization", model="sshleifer/distilbart-cnn-6-6", device=-1  # CPU
+                "summarization",
+                model="sshleifer/distilbart-cnn-6-6",
+                device=-1,  # CPU
             )
             logger.info("✅ Transformers pipeline initialized successfully")
         except Exception as e:
@@ -77,7 +80,7 @@ class TransformersSummarizer:
         text: str,
         max_length: int = 130,
         min_length: int = 30,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Stream text summarization results word-by-word.
 

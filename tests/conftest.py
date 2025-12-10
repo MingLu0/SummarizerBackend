@@ -3,7 +3,7 @@ Test configuration and fixtures for the text summarizer backend.
 """
 
 import asyncio
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 
 import pytest
 from httpx import AsyncClient
@@ -38,12 +38,12 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
 def sample_text() -> str:
     """Sample text for testing summarization."""
     return """
-    Artificial intelligence (AI) is intelligence demonstrated by machines, 
-    in contrast to the natural intelligence displayed by humans and animals. 
-    Leading AI textbooks define the field as the study of "intelligent agents": 
-    any device that perceives its environment and takes actions that maximize 
-    its chance of successfully achieving its goals. The term "artificial intelligence" 
-    is often used to describe machines that mimic "cognitive" functions that humans 
+    Artificial intelligence (AI) is intelligence demonstrated by machines,
+    in contrast to the natural intelligence displayed by humans and animals.
+    Leading AI textbooks define the field as the study of "intelligent agents":
+    any device that perceives its environment and takes actions that maximize
+    its chance of successfully achieving its goals. The term "artificial intelligence"
+    is often used to describe machines that mimic "cognitive" functions that humans
     associate with the human mind, such as "learning" and "problem solving".
     """
 

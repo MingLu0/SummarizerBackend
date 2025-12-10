@@ -6,7 +6,8 @@ import asyncio
 import json
 import threading
 import time
-from typing import Any, AsyncGenerator, Dict, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -20,6 +21,7 @@ import os
 
 _original_getuser = getpass.getuser
 
+
 def _mock_getuser():
     """Mock getuser for HF Spaces compatibility."""
     try:
@@ -27,6 +29,7 @@ def _mock_getuser():
     except KeyError:
         # Fallback for containerized environments without proper user database
         return os.environ.get("USER", os.environ.get("USERNAME", "user"))
+
 
 getpass.getuser = _mock_getuser
 
@@ -58,38 +61,47 @@ outlines_generate = None
 
 try:
     import outlines
+
     # Check what's available in outlines module
-    available_attrs = [attr for attr in dir(outlines) if not attr.startswith('_')]
+    available_attrs = [attr for attr in dir(outlines) if not attr.startswith("_")]
     logger.info(f"Outlines module attributes: {available_attrs}")
-    
+
     # Try to import models
     try:
         from outlines import models as outlines_models
     except ImportError:
         logger.warning("Could not import outlines.models")
         raise
-    
+
     # Try to import generate module (for outlines.generate.json)
     try:
         from outlines import generate as outlines_generate
+
         logger.info("✅ Found outlines.generate module")
     except ImportError as e:
         logger.warning(f"Could not import outlines.generate: {e}")
         outlines_generate = None
-    
+
     if outlines_generate is None:
-        raise ImportError(f"Could not import outlines.generate. Available in outlines: {available_attrs[:10]}...")
-    
+        raise ImportError(
+            f"Could not import outlines.generate. Available in outlines: {available_attrs[:10]}..."
+        )
+
     OUTLINES_AVAILABLE = True
     logger.info("✅ Outlines library imported successfully")
 except ImportError as e:
-    logger.warning(f"Outlines library not available: {e}. V4 JSON streaming endpoints will be disabled.")
+    logger.warning(
+        f"Outlines library not available: {e}. V4 JSON streaming endpoints will be disabled."
+    )
 except Exception as e:
-    logger.warning(f"Error importing Outlines library: {e}. V4 JSON streaming endpoints will be disabled.")
+    logger.warning(
+        f"Error importing Outlines library: {e}. V4 JSON streaming endpoints will be disabled."
+    )
 
 
 class StructuredSummary(BaseModel):
     """Pydantic schema for structured summary output."""
+
     title: str
     main_summary: str
     key_points: list[str]
@@ -103,8 +115,8 @@ class StructuredSummarizer:
 
     def __init__(self):
         """Initialize the Qwen model and tokenizer with GPU/INT4 when possible."""
-        self.tokenizer: Optional[AutoTokenizer] = None
-        self.model: Optional[AutoModelForCausalLM] = None
+        self.tokenizer: AutoTokenizer | None = None
+        self.model: AutoModelForCausalLM | None = None
         self.outlines_model = None  # Outlines wrapper over the HF model
 
         if not TRANSFORMERS_AVAILABLE:
@@ -135,14 +147,16 @@ class StructuredSummarizer:
             # OR FP16 for speed (2-3x faster, uses more memory)
             # ------------------------------------------------------------------
             use_fp16_for_speed = getattr(settings, "v4_use_fp16_for_speed", False)
-            
+
             if (
                 use_cuda
                 and not use_fp16_for_speed
                 and getattr(settings, "v4_enable_quantization", True)
                 and HAS_BITSANDBYTES
             ):
-                logger.info("Applying 4-bit NF4 quantization (bitsandbytes) to V4 model...")
+                logger.info(
+                    "Applying 4-bit NF4 quantization (bitsandbytes) to V4 model..."
+                )
                 quant_config = BitsAndBytesConfig(
                     load_in_4bit=True,
                     bnb_4bit_compute_dtype=torch.bfloat16,
@@ -158,10 +172,12 @@ class StructuredSummarizer:
                     trust_remote_code=True,
                 )
                 quantization_desc = "4-bit NF4 (bitsandbytes, GPU)"
-            
+
             elif use_cuda and use_fp16_for_speed:
                 # Use FP16 for 2-3x faster inference (uses ~2-3GB GPU memory)
-                logger.info("Loading V4 model in FP16 for maximum speed (2-3x faster than 4-bit)...")
+                logger.info(
+                    "Loading V4 model in FP16 for maximum speed (2-3x faster than 4-bit)..."
+                )
                 self.model = AutoModelForCausalLM.from_pretrained(
                     settings.v4_model_id,
                     dtype=torch.float16,
@@ -194,7 +210,9 @@ class StructuredSummarizer:
                 # Optional dynamic INT8 quantization on CPU
                 if getattr(settings, "v4_enable_quantization", True) and not use_cuda:
                     try:
-                        logger.info("Applying dynamic INT8 quantization to V4 model on CPU...")
+                        logger.info(
+                            "Applying dynamic INT8 quantization to V4 model on CPU..."
+                        )
                         self.model = torch.quantization.quantize_dynamic(
                             self.model, {torch.nn.Linear}, dtype=torch.qint8
                         )
@@ -219,13 +237,17 @@ class StructuredSummarizer:
             # Wrap the HF model + tokenizer in an Outlines Transformers model
             if OUTLINES_AVAILABLE:
                 try:
-                    self.outlines_model = outlines_models.Transformers(self.model, self.tokenizer)
+                    self.outlines_model = outlines_models.Transformers(
+                        self.model, self.tokenizer
+                    )
                     logger.info("✅ Outlines model wrapper initialized for V4")
                 except Exception as e:
                     logger.error(f"❌ Failed to initialize Outlines wrapper: {e}")
                     self.outlines_model = None
             else:
-                logger.warning("⚠️ Outlines not available - V4 JSON streaming endpoints will be disabled")
+                logger.warning(
+                    "⚠️ Outlines not available - V4 JSON streaming endpoints will be disabled"
+                )
                 self.outlines_model = None
 
         except Exception as e:
@@ -251,17 +273,23 @@ class StructuredSummarizer:
             logger.error(f"❌ V4 model warmup failed: {e}")
 
         # Also warm up Outlines JSON generation
-        if OUTLINES_AVAILABLE and self.outlines_model is not None and outlines_generate is not None:
+        if (
+            OUTLINES_AVAILABLE
+            and self.outlines_model is not None
+            and outlines_generate is not None
+        ):
             try:
                 # Use outlines.generate.json(model, schema) pattern
-                json_generator = outlines_generate.json(self.outlines_model, StructuredSummary)
-                
+                json_generator = outlines_generate.json(
+                    self.outlines_model, StructuredSummary
+                )
+
                 # Try to call it with a simple prompt
                 result = json_generator("Warmup text for Outlines structured summary.")
                 # Consume the generator if it's a generator
-                if hasattr(result, '__iter__') and not isinstance(result, str):
+                if hasattr(result, "__iter__") and not isinstance(result, str):
                     _ = list(result)[:1]  # Just consume first item for warmup
-                
+
                 logger.info("✅ V4 Outlines JSON warmup successful")
             except Exception as e:
                 logger.warning(f"⚠️ V4 Outlines JSON warmup failed: {e}")
@@ -359,7 +387,7 @@ Rules:
         }
         return style_prompts.get(style, style_prompts["executive"])
 
-    def _empty_state(self) -> Dict[str, Any]:
+    def _empty_state(self) -> dict[str, Any]:
         """Initial empty structured state that patches will build up."""
         return {
             "title": None,
@@ -370,7 +398,7 @@ Rules:
             "read_time_min": None,
         }
 
-    def _apply_patch(self, state: Dict[str, Any], patch: Dict[str, Any]) -> bool:
+    def _apply_patch(self, state: dict[str, Any], patch: dict[str, Any]) -> bool:
         """
         Apply a single patch to the state.
         Returns True if this is a 'done' patch (signals logical completion).
@@ -396,8 +424,8 @@ Rules:
     def _fallback_fill_missing_fields(
         self,
         text: str,
-        state: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        state: dict[str, Any],
+    ) -> dict[str, Any]:
         """
         Fallback to fill missing fields when the model stopped early
         and did not provide title, main_summary, or read_time_min.
@@ -483,8 +511,8 @@ Rules:
         self,
         text: str,
         style: str = "executive",
-        max_tokens: Optional[int] = None,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Stream structured summarization using Phi-3.
 
@@ -533,7 +561,8 @@ Rules:
                 "do_sample": True,
                 "temperature": settings.v4_temperature,
                 "top_p": 0.9,
-                "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+                "pad_token_id": self.tokenizer.pad_token_id
+                or self.tokenizer.eos_token_id,
                 "eos_token_id": self.tokenizer.eos_token_id,
             }
 
@@ -582,8 +611,8 @@ Rules:
         self,
         text: str,
         style: str = "executive",
-        max_tokens: Optional[int] = None,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+        max_tokens: int | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Stream structured summarization using NDJSON patch-based protocol.
 
@@ -646,14 +675,15 @@ Rules:
                 "streamer": streamer,
                 "max_new_tokens": max_new_tokens,
                 "do_sample": False,
-                "pad_token_id": self.tokenizer.pad_token_id or self.tokenizer.eos_token_id,
+                "pad_token_id": self.tokenizer.pad_token_id
+                or self.tokenizer.eos_token_id,
                 "eos_token_id": self.tokenizer.eos_token_id,
             }
 
             # DEBUG: Log generation config
-            logger.info(f"🎛️ Generation config:")
+            logger.info("🎛️ Generation config:")
             logger.info(f"  max_new_tokens: {max_new_tokens}")
-            logger.info(f"  do_sample: False (greedy decoding for speed)")
+            logger.info("  do_sample: False (greedy decoding for speed)")
             logger.info(f"  eos_token_id: {self.tokenizer.eos_token_id}")
             logger.info(f"  pad_token_id: {gen_kwargs['pad_token_id']}")
 
@@ -687,7 +717,9 @@ Rules:
                             continue
 
                         # DEBUG: Log every line BEFORE filtering
-                        logger.info(f"📄 Raw line (at token #{token_count}): {line[:100]}...")
+                        logger.info(
+                            f"📄 Raw line (at token #{token_count}): {line[:100]}..."
+                        )
 
                         # Heuristic: skip anything that clearly isn't a JSON patch object
                         # This filters out lines like "#include <bits/stdc++.h>" or random prose.
@@ -701,16 +733,20 @@ Rules:
                         patch = None
                         try:
                             patch = json.loads(line)
-                            
+
                             # Log each valid patch received from model
                             op = patch.get("op")
                             if op == "done":
                                 logger.info("✅ Model emitted done patch")
                             elif op == "set":
-                                logger.info(f"📝 Model set: {patch.get('field')} = {str(patch.get('value'))[:50]}...")
+                                logger.info(
+                                    f"📝 Model set: {patch.get('field')} = {str(patch.get('value'))[:50]}..."
+                                )
                             elif op == "append":
-                                logger.info(f"➕ Model append: {patch.get('field')} += {str(patch.get('value'))[:50]}...")
-                            
+                                logger.info(
+                                    f"➕ Model append: {patch.get('field')} += {str(patch.get('value'))[:50]}..."
+                                )
+
                         except json.JSONDecodeError as e:
                             logger.warning(
                                 f"Failed to parse NDJSON line: {line[:150]}... Error: {e}"
@@ -722,54 +758,72 @@ Rules:
                                 brace_count = 0
                                 end_pos = -1
                                 for i, char in enumerate(line):
-                                    if char == '{':
+                                    if char == "{":
                                         brace_count += 1
-                                    elif char == '}':
+                                    elif char == "}":
                                         brace_count -= 1
                                         if brace_count == 0:
                                             end_pos = i + 1
                                             break
-                                
+
                                 if end_pos > 0:
                                     # Found a complete JSON object, try parsing just that part
                                     try:
                                         patch = json.loads(line[:end_pos])
-                                        logger.info(f"✅ Extracted valid JSON from incomplete line")
+                                        logger.info(
+                                            "✅ Extracted valid JSON from incomplete line"
+                                        )
                                     except:
                                         pass
-                                
+
                                 # Strategy 2: If still failed, try to fix common quote issues
                                 if patch is None and '"value":"' in line:
                                     # Try to escape unescaped quotes in the value field
                                     import re
+
                                     # Simple heuristic: if we see a pattern like "value":"...text with 'quote'..."
                                     # try to escape the inner quotes
                                     def try_fix_quotes(text):
                                         # Try to find and close the value string properly
-                                        match = re.match(r'(\{"op":"[^"]+","field":"[^"]+","value":")(.*?)(.*)$', text)
+                                        match = re.match(
+                                            r'(\{"op":"[^"]+","field":"[^"]+","value":")(.*?)(.*)$',
+                                            text,
+                                        )
                                         if match:
                                             prefix = match.group(1)
                                             value_content = match.group(2)
                                             rest = match.group(3)
                                             # Escape any unescaped quotes in the value
-                                            value_content = value_content.replace('\\"', '__TEMP__')
-                                            value_content = value_content.replace('"', '\\"')
-                                            value_content = value_content.replace('__TEMP__', '\\"')
+                                            value_content = value_content.replace(
+                                                '\\"', "__TEMP__"
+                                            )
+                                            value_content = value_content.replace(
+                                                '"', '\\"'
+                                            )
+                                            value_content = value_content.replace(
+                                                "__TEMP__", '\\"'
+                                            )
                                             # Try to reconstruct: prefix + escaped_value + "}"
                                             if rest.startswith('"}'):
                                                 try:
-                                                    return json.loads(prefix + value_content + rest)
+                                                    return json.loads(
+                                                        prefix + value_content + rest
+                                                    )
                                                 except:
                                                     pass
                                         return None
-                                    
+
                                     repaired = try_fix_quotes(line)
                                     if repaired:
                                         patch = repaired
-                                        logger.info(f"✅ Repaired JSON by escaping quotes")
+                                        logger.info(
+                                            "✅ Repaired JSON by escaping quotes"
+                                        )
                             except Exception as repair_error:
-                                logger.debug(f"JSON repair attempt failed: {repair_error}")
-                            
+                                logger.debug(
+                                    f"JSON repair attempt failed: {repair_error}"
+                                )
+
                             if patch is None:
                                 continue
 
@@ -824,9 +878,13 @@ Rules:
                                 "tokens_used": token_count,
                             }
                     except json.JSONDecodeError:
-                        logger.warning(f"⚠️ Could not parse remaining buffer as JSON: {buffer_cleaned[:100]}")
+                        logger.warning(
+                            f"⚠️ Could not parse remaining buffer as JSON: {buffer_cleaned[:100]}"
+                        )
                 else:
-                    logger.warning(f"🗑️ Unparsed buffer remaining (not JSON): {repr(buffer[:200])}")
+                    logger.warning(
+                        f"🗑️ Unparsed buffer remaining (not JSON): {repr(buffer[:200])}"
+                    )
             else:
                 logger.info("✅ Buffer was fully consumed (no partial lines)")
 
@@ -837,7 +895,13 @@ Rules:
 
             # If the model never emitted {"op":"done"} OR left required fields missing,
             # run a fallback to fill the gaps and emit synthetic patch events.
-            required_fields = ["title", "main_summary", "category", "sentiment", "read_time_min"]
+            required_fields = [
+                "title",
+                "main_summary",
+                "category",
+                "sentiment",
+                "read_time_min",
+            ]
             missing_required = [f for f in required_fields if state.get(f) is None]
 
             if missing_required:
@@ -921,13 +985,20 @@ Rules:
             logger.error("❌ Outlines model not available for V4")
             # Provide detailed error information
             if not OUTLINES_AVAILABLE:
-                error_msg = "Outlines library not installed. Please install outlines>=0.0.34."
+                error_msg = (
+                    "Outlines library not installed. Please install outlines>=0.0.34."
+                )
             elif not self.model or not self.tokenizer:
-                error_msg = "Base V4 model not loaded. Outlines wrapper cannot be created."
+                error_msg = (
+                    "Base V4 model not loaded. Outlines wrapper cannot be created."
+                )
             else:
                 error_msg = "Outlines model wrapper initialization failed. Check server logs for details."
-            
-            error_obj = {"error": "V4 Outlines model not available", "detail": error_msg}
+
+            error_obj = {
+                "error": "V4 Outlines model not available",
+                "detail": error_msg,
+            }
             yield json.dumps(error_obj)
             return
 
@@ -942,7 +1013,9 @@ Rules:
         # Truncate text to prevent token overflow (reuse your existing max_chars idea)
         max_chars = 10000
         if len(text) > max_chars:
-            logger.warning(f"Truncating input text from {len(text)} to {max_chars} chars for V4 JSON streaming.")
+            logger.warning(
+                f"Truncating input text from {len(text)} to {max_chars} chars for V4 JSON streaming."
+            )
             text = text[:max_chars]
 
         # Build a compact prompt; Outlines will handle the schema, so no huge system prompt needed
@@ -963,7 +1036,9 @@ Rules:
         try:
             # Check if Outlines is available
             if not OUTLINES_AVAILABLE or outlines_generate is None:
-                error_obj = {"error": "Outlines library not available. Please install outlines>=0.0.34."}
+                error_obj = {
+                    "error": "Outlines library not available. Please install outlines>=0.0.34."
+                }
                 yield json.dumps(error_obj)
                 return
 
@@ -971,12 +1046,14 @@ Rules:
 
             # Create an Outlines generator bound to the StructuredSummary schema
             # Modern Outlines API: outlines.generate.json(model, schema)
-            json_generator = outlines_generate.json(self.outlines_model, StructuredSummary)
+            json_generator = outlines_generate.json(
+                self.outlines_model, StructuredSummary
+            )
 
             # Call the generator with the prompt to get streaming tokens
             # The generator returns an iterable of string tokens
             token_iter = json_generator(prompt)
-            
+
             # Stream tokens; each token is a string fragment of the final JSON object
             for token in token_iter:
                 # Each `token` is a raw string fragment; just pass it through
@@ -986,7 +1063,9 @@ Rules:
                     await asyncio.sleep(0)
 
             latency_ms = (time.time() - start_time) * 1000.0
-            logger.info(f"✅ V4 Outlines JSON streaming completed in {latency_ms:.2f}ms")
+            logger.info(
+                f"✅ V4 Outlines JSON streaming completed in {latency_ms:.2f}ms"
+            )
 
         except Exception as e:
             logger.exception("❌ V4 Outlines JSON streaming failed")

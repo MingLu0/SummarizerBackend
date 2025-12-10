@@ -4,7 +4,7 @@ Article scraping service for V3 API using trafilatura.
 
 import random
 import time
-from typing import Any, Dict, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 import httpx
@@ -34,8 +34,7 @@ USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     # Firefox on Windows
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) "
-    "Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
     # Safari on macOS
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 "
     "(KHTML, like Gecko) Version/17.1 Safari/605.1.15",
@@ -55,7 +54,7 @@ class ArticleScraperService:
         else:
             logger.info("✅ Article scraper service initialized")
 
-    async def scrape_article(self, url: str, use_cache: bool = True) -> Dict[str, Any]:
+    async def scrape_article(self, url: str, use_cache: bool = True) -> dict[str, Any]:
         """
         Scrape article content from URL with caching support.
 
@@ -176,7 +175,7 @@ class ArticleScraperService:
             logger.error(f"Scraping failed for URL {url}: {e}")
             raise
 
-    def _get_random_headers(self) -> Dict[str, str]:
+    def _get_random_headers(self) -> dict[str, str]:
         """
         Generate realistic browser headers with random user-agent.
 
@@ -249,7 +248,7 @@ class ArticleScraperService:
         except Exception:
             return "Unknown"
 
-    def _extract_title_fallback(self, html: str) -> Optional[str]:
+    def _extract_title_fallback(self, html: str) -> str | None:
         """
         Fallback method to extract title from HTML if metadata extraction fails.
 

@@ -25,12 +25,14 @@ pytest --cov=app --cov-report=html:htmlcov
 
 ### Code Quality
 ```bash
-# Format code
-black app/
-isort app/
+# Lint code (with auto-fix)
+ruff check --fix app/
 
-# Lint code
-flake8 app/
+# Format code
+ruff format app/
+
+# Run both linting and formatting
+ruff check --fix app/ && ruff format app/
 ```
 
 ### Running Locally

@@ -2,8 +2,6 @@
 Tests for configuration management.
 """
 
-import os
-
 import pytest
 
 from app.core.config import Settings, settings
@@ -80,7 +78,7 @@ class TestSettings:
         monkeypatch.setenv("API_KEY_ENABLED", "invalid")
         monkeypatch.setenv("RATE_LIMIT_ENABLED", "maybe")
 
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValueError):  # Pydantic validation error
             Settings()
 
     def test_invalid_integer_environment_variables(self, monkeypatch):
@@ -89,7 +87,7 @@ class TestSettings:
         monkeypatch.setenv("SERVER_PORT", "not-a-number")
         monkeypatch.setenv("MAX_TEXT_LENGTH", "abc")
 
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValueError):  # Pydantic validation error
             Settings()
 
     def test_negative_integer_environment_variables(self, monkeypatch):
@@ -98,7 +96,7 @@ class TestSettings:
         monkeypatch.setenv("SERVER_PORT", "-1")
         monkeypatch.setenv("MAX_TEXT_LENGTH", "-1000")
 
-        with pytest.raises(Exception):  # Pydantic validation error
+        with pytest.raises(ValueError):  # Pydantic validation error
             Settings()
 
     def test_settings_validation(self):

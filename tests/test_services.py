@@ -121,12 +121,16 @@ class TestOllamaService:
     @pytest.mark.asyncio
     async def test_summarize_text_timeout(self, ollama_service):
         """Test timeout handling."""
-        with patch(
-            "httpx.AsyncClient",
-            return_value=StubAsyncClient(post_exc=httpx.TimeoutException("Timeout")),
+        with (
+            patch(
+                "httpx.AsyncClient",
+                return_value=StubAsyncClient(
+                    post_exc=httpx.TimeoutException("Timeout")
+                ),
+            ),
+            pytest.raises(httpx.TimeoutException),
         ):
-            with pytest.raises(httpx.TimeoutException):
-                await ollama_service.summarize_text("Test text")
+            await ollama_service.summarize_text("Test text")
 
     @pytest.mark.asyncio
     async def test_summarize_text_http_error(self, ollama_service):
@@ -135,11 +139,14 @@ class TestOllamaService:
             "Bad Request", request=MagicMock(), response=MagicMock()
         )
         stub_response = StubAsyncResponse(raise_for_status_exc=http_error)
-        with patch(
-            "httpx.AsyncClient", return_value=StubAsyncClient(post_result=stub_response)
+        with (
+            patch(
+                "httpx.AsyncClient",
+                return_value=StubAsyncClient(post_result=stub_response),
+            ),
+            pytest.raises(httpx.HTTPError),
         ):
-            with pytest.raises(httpx.HTTPError):
-                await ollama_service.summarize_text("Test text")
+            await ollama_service.summarize_text("Test text")
 
     @pytest.mark.asyncio
     async def test_check_health_success(self, ollama_service):
@@ -168,7 +175,6 @@ class TestOllamaService:
     ):
         """Test dynamic timeout calculation for small text (should use base timeout)."""
         stub_response = StubAsyncResponse(json_data=mock_ollama_response)
-        captured_timeout = None
 
         class TimeoutCaptureClient(StubAsyncClient):
             def __init__(self, *args, **kwargs):
@@ -185,7 +191,7 @@ class TestOllamaService:
             mock_client.return_value = TimeoutCaptureClient(post_result=stub_response)
             mock_client.return_value.timeout = 30  # Test environment base timeout
 
-            result = await ollama_service.summarize_text("Short text")
+            await ollama_service.summarize_text("Short text")
 
             # Verify the client was called with the base timeout
             mock_client.assert_called_once()
@@ -203,7 +209,7 @@ class TestOllamaService:
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=stub_response)
 
-            result = await ollama_service.summarize_text(large_text)
+            await ollama_service.summarize_text(large_text)
 
             # Verify the client was called with extended timeout
             # Timeout calculated with ORIGINAL text length (5000 chars): 30 + (5000-1000)/1000 * 3 = 30 + 12 = 42s
@@ -223,7 +229,7 @@ class TestOllamaService:
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=stub_response)
 
-            result = await ollama_service.summarize_text(very_large_text)
+            await ollama_service.summarize_text(very_large_text)
 
             # Verify the timeout is capped at 90 seconds (actual cap)
             mock_client.assert_called_once()
@@ -404,11 +410,13 @@ class TestOllamaService:
             def stream(self, method, url, **kwargs):
                 raise httpx.TimeoutException("Timeout")
 
-        with patch("httpx.AsyncClient", return_value=MockStreamClient()):
-            with pytest.raises(httpx.TimeoutException):
-                chunks = []
-                async for chunk in ollama_service.summarize_text_stream("Test text"):
-                    chunks.append(chunk)
+        with (
+            patch("httpx.AsyncClient", return_value=MockStreamClient()),
+            pytest.raises(httpx.TimeoutException),
+        ):
+            chunks = []
+            async for chunk in ollama_service.summarize_text_stream("Test text"):
+                chunks.append(chunk)
 
     @pytest.mark.asyncio
     async def test_summarize_text_stream_http_error(self, ollama_service):
@@ -427,11 +435,13 @@ class TestOllamaService:
             def stream(self, method, url, **kwargs):
                 raise http_error
 
-        with patch("httpx.AsyncClient", return_value=MockStreamClient()):
-            with pytest.raises(httpx.HTTPStatusError):
-                chunks = []
-                async for chunk in ollama_service.summarize_text_stream("Test text"):
-                    chunks.append(chunk)
+        with (
+            patch("httpx.AsyncClient", return_value=MockStreamClient()),
+            pytest.raises(httpx.HTTPStatusError),
+        ):
+            chunks = []
+            async for chunk in ollama_service.summarize_text_stream("Test text"):
+                chunks.append(chunk)
 
     @pytest.mark.asyncio
     async def test_summarize_text_stream_empty_response(self, ollama_service):

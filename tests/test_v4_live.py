@@ -9,6 +9,7 @@ Run with: pytest tests/test_v4_live.py -v
 """
 
 import json
+
 import pytest
 from pydantic import ValidationError
 
@@ -20,14 +21,16 @@ def test_outlines_library_imports():
     """Test that Outlines library can be imported successfully."""
     try:
         import outlines
-        from outlines import models as outlines_models
         from outlines import generate as outlines_generate
+        from outlines import models as outlines_models
 
         # Verify key components exist
         assert outlines is not None
         assert outlines_models is not None
         assert outlines_generate is not None
-        assert hasattr(outlines_generate, 'json'), "outlines.generate should have 'json' method"
+        assert hasattr(outlines_generate, "json"), (
+            "outlines.generate should have 'json' method"
+        )
 
         print("✅ Outlines library imported successfully")
     except ImportError as e:
@@ -53,7 +56,7 @@ async def test_structured_summarizer_initialization():
     assert structured_summarizer_service is not None
 
     # Check that Outlines model wrapper was created
-    assert hasattr(structured_summarizer_service, 'outlines_model'), (
+    assert hasattr(structured_summarizer_service, "outlines_model"), (
         "StructuredSummarizer should have 'outlines_model' attribute"
     )
 
@@ -62,7 +65,7 @@ async def test_structured_summarizer_initialization():
         "Check StructuredSummarizer.__init__() for errors."
     )
 
-    print(f"✅ StructuredSummarizer initialized with Outlines wrapper")
+    print("✅ StructuredSummarizer initialized with Outlines wrapper")
 
 
 @pytest.mark.asyncio
@@ -76,8 +79,8 @@ async def test_outlines_json_streaming_basic():
     - The JSON schema binding fails
     - The streaming doesn't produce valid JSON
     """
-    from app.services.structured_summarizer import structured_summarizer_service
     from app.api.v4.schemas import StructuredSummary, SummarizationStyle
+    from app.services.structured_summarizer import structured_summarizer_service
 
     # Use a simple test text
     test_text = (
@@ -89,14 +92,12 @@ async def test_outlines_json_streaming_basic():
     # Call the actual Outlines-based streaming method
     json_tokens = []
     async for token in structured_summarizer_service.summarize_structured_stream_json(
-        text=test_text,
-        style=SummarizationStyle.EXECUTIVE,
-        max_tokens=256
+        text=test_text, style=SummarizationStyle.EXECUTIVE, max_tokens=256
     ):
         json_tokens.append(token)
 
     # Combine all tokens into complete JSON string
-    complete_json = ''.join(json_tokens)
+    complete_json = "".join(json_tokens)
 
     print(f"\n📝 Generated JSON ({len(complete_json)} chars):")
     print(complete_json)
@@ -105,7 +106,9 @@ async def test_outlines_json_streaming_basic():
     try:
         parsed_json = json.loads(complete_json)
     except json.JSONDecodeError as e:
-        pytest.fail(f"Outlines generated invalid JSON: {e}\n\nGenerated content:\n{complete_json}")
+        pytest.fail(
+            f"Outlines generated invalid JSON: {e}\n\nGenerated content:\n{complete_json}"
+        )
 
     # Verify it matches the StructuredSummary schema
     try:
@@ -115,14 +118,16 @@ async def test_outlines_json_streaming_basic():
         assert structured_summary.title, "title should not be empty"
         assert structured_summary.main_summary, "main_summary should not be empty"
         assert structured_summary.key_points, "key_points should not be empty"
-        assert len(structured_summary.key_points) > 0, "key_points should have at least one item"
+        assert len(structured_summary.key_points) > 0, (
+            "key_points should have at least one item"
+        )
         assert structured_summary.category, "category should not be empty"
-        assert structured_summary.sentiment in ['positive', 'negative', 'neutral'], (
+        assert structured_summary.sentiment in ["positive", "negative", "neutral"], (
             f"sentiment should be valid enum value, got: {structured_summary.sentiment}"
         )
         assert structured_summary.read_time_min > 0, "read_time_min should be positive"
 
-        print(f"✅ Outlines generated valid StructuredSummary:")
+        print("✅ Outlines generated valid StructuredSummary:")
         print(f"   Title: {structured_summary.title}")
         print(f"   Summary: {structured_summary.main_summary[:100]}...")
         print(f"   Key Points: {len(structured_summary.key_points)} items")
@@ -131,47 +136,51 @@ async def test_outlines_json_streaming_basic():
         print(f"   Read Time: {structured_summary.read_time_min} min")
 
     except ValidationError as e:
-        pytest.fail(f"Outlines generated JSON doesn't match StructuredSummary schema: {e}\n\nGenerated JSON:\n{complete_json}")
+        pytest.fail(
+            f"Outlines generated JSON doesn't match StructuredSummary schema: {e}\n\nGenerated JSON:\n{complete_json}"
+        )
 
 
 @pytest.mark.asyncio
 async def test_outlines_json_streaming_different_styles():
     """Test that Outlines works with different summarization styles."""
-    from app.services.structured_summarizer import structured_summarizer_service
     from app.api.v4.schemas import StructuredSummary, SummarizationStyle
+    from app.services.structured_summarizer import structured_summarizer_service
 
     test_text = "Climate change is affecting global weather patterns. Scientists warn of rising temperatures."
 
     styles_to_test = [
         SummarizationStyle.SKIMMER,
         SummarizationStyle.EXECUTIVE,
-        SummarizationStyle.ELI5
+        SummarizationStyle.ELI5,
     ]
 
     for style in styles_to_test:
         json_tokens = []
-        async for token in structured_summarizer_service.summarize_structured_stream_json(
-            text=test_text,
-            style=style,
-            max_tokens=128
+        async for (
+            token
+        ) in structured_summarizer_service.summarize_structured_stream_json(
+            text=test_text, style=style, max_tokens=128
         ):
             json_tokens.append(token)
 
-        complete_json = ''.join(json_tokens)
+        complete_json = "".join(json_tokens)
 
         try:
             parsed_json = json.loads(complete_json)
-            structured_summary = StructuredSummary(**parsed_json)
+            StructuredSummary(**parsed_json)
             print(f"✅ Style {style.value}: Generated valid summary")
         except (json.JSONDecodeError, ValidationError) as e:
-            pytest.fail(f"Failed to generate valid summary for style {style.value}: {e}")
+            pytest.fail(
+                f"Failed to generate valid summary for style {style.value}: {e}"
+            )
 
 
 @pytest.mark.asyncio
 async def test_outlines_with_longer_text():
     """Test Outlines with longer text that triggers truncation."""
-    from app.services.structured_summarizer import structured_summarizer_service
     from app.api.v4.schemas import StructuredSummary, SummarizationStyle
+    from app.services.structured_summarizer import structured_summarizer_service
 
     # Create a longer text (will be truncated to 10000 chars)
     test_text = (
@@ -182,17 +191,15 @@ async def test_outlines_with_longer_text():
 
     json_tokens = []
     async for token in structured_summarizer_service.summarize_structured_stream_json(
-        text=test_text,
-        style=SummarizationStyle.EXECUTIVE,
-        max_tokens=256
+        text=test_text, style=SummarizationStyle.EXECUTIVE, max_tokens=256
     ):
         json_tokens.append(token)
 
-    complete_json = ''.join(json_tokens)
+    complete_json = "".join(json_tokens)
 
     try:
         parsed_json = json.loads(complete_json)
-        structured_summary = StructuredSummary(**parsed_json)
+        StructuredSummary(**parsed_json)
         print(f"✅ Long text: Generated valid summary from {len(test_text)} chars")
     except (json.JSONDecodeError, ValidationError) as e:
         pytest.fail(f"Failed to generate valid summary for long text: {e}")
@@ -201,8 +208,8 @@ async def test_outlines_with_longer_text():
 @pytest.mark.asyncio
 async def test_outlines_error_handling_when_model_unavailable():
     """Test that proper error JSON is returned if Outlines model is unavailable."""
-    from app.services.structured_summarizer import StructuredSummarizer
     from app.api.v4.schemas import SummarizationStyle
+    from app.services.structured_summarizer import StructuredSummarizer
 
     # Create a StructuredSummarizer instance without initializing the model
     # This simulates the case where Outlines is unavailable
@@ -213,18 +220,16 @@ async def test_outlines_error_handling_when_model_unavailable():
 
     json_tokens = []
     async for token in fake_summarizer.summarize_structured_stream_json(
-        text="Test text",
-        style=SummarizationStyle.EXECUTIVE,
-        max_tokens=128
+        text="Test text", style=SummarizationStyle.EXECUTIVE, max_tokens=128
     ):
         json_tokens.append(token)
 
-    complete_json = ''.join(json_tokens)
+    complete_json = "".join(json_tokens)
 
     # Should return error JSON
     try:
         parsed_json = json.loads(complete_json)
-        assert 'error' in parsed_json, "Error response should contain 'error' field"
+        assert "error" in parsed_json, "Error response should contain 'error' field"
         print(f"✅ Error handling: {parsed_json['error']}")
     except json.JSONDecodeError as e:
         pytest.fail(f"Error response is not valid JSON: {e}")

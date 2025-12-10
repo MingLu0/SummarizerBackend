@@ -2,9 +2,6 @@
 Configuration management for the text summarizer backend.
 """
 
-import os
-from typing import Optional
-
 from pydantic import Field, validator
 from pydantic_settings import BaseSettings
 
@@ -24,7 +21,7 @@ class Settings(BaseSettings):
 
     # Optional: API Security
     api_key_enabled: bool = Field(default=False, env="API_KEY_ENABLED")
-    api_key: Optional[str] = Field(default=None, env="API_KEY")
+    api_key: str | None = Field(default=None, env="API_KEY")
 
     # Optional: Rate Limiting
     rate_limit_enabled: bool = Field(default=False, env="RATE_LIMIT_ENABLED")
@@ -99,7 +96,9 @@ class Settings(BaseSettings):
 
     # V4 Structured Output Configuration
     enable_v4_structured: bool = Field(
-        default=True, env="ENABLE_V4_STRUCTURED", description="Enable V4 structured summarization API"
+        default=True,
+        env="ENABLE_V4_STRUCTURED",
+        description="Enable V4 structured summarization API",
     )
     enable_v4_warmup: bool = Field(
         default=False,
@@ -112,10 +111,18 @@ class Settings(BaseSettings):
         description="Model ID for V4 structured output (1.5B params, fits HF 16GB limit)",
     )
     v4_max_tokens: int = Field(
-        default=256, env="V4_MAX_TOKENS", ge=128, le=2048, description="Max tokens for V4 generation"
+        default=256,
+        env="V4_MAX_TOKENS",
+        ge=128,
+        le=2048,
+        description="Max tokens for V4 generation",
     )
     v4_temperature: float = Field(
-        default=0.2, env="V4_TEMPERATURE", ge=0.0, le=2.0, description="Temperature for V4 (low for stable JSON)"
+        default=0.2,
+        env="V4_TEMPERATURE",
+        ge=0.0,
+        le=2.0,
+        description="Temperature for V4 (low for stable JSON)",
     )
     v4_enable_quantization: bool = Field(
         default=True,
@@ -139,6 +146,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra fields from environment (e.g., old v4_phi_* variables)
 
 
 # Global settings instance

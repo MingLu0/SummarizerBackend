@@ -4,8 +4,6 @@ Tests for the cache service.
 
 import time
 
-import pytest
-
 from app.core.cache import SimpleCache
 
 

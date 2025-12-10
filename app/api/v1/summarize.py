@@ -25,7 +25,7 @@ async def summarize(payload: SummarizeRequest) -> SummarizeResponse:
             prompt=payload.prompt or "Summarize the following text concisely:",
         )
         return SummarizeResponse(**result)
-    except httpx.TimeoutException as e:
+    except httpx.TimeoutException:
         # Timeout error - provide helpful message
         raise HTTPException(
             status_code=504,
@@ -51,7 +51,7 @@ async def _stream_generator(payload: SummarizeRequest):
             sse_data = json.dumps(chunk)
             yield f"data: {sse_data}\n\n"
 
-    except httpx.TimeoutException as e:
+    except httpx.TimeoutException:
         # Send error event in SSE format
         error_chunk = {
             "content": "",

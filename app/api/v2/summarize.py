@@ -4,7 +4,7 @@ V2 Summarization endpoints using HuggingFace streaming.
 
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
 
 from app.api.v2.schemas import SummarizeRequest

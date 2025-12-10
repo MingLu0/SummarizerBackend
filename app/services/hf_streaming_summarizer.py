@@ -5,7 +5,8 @@ HuggingFace streaming service for V2 API using lower-level transformers API with
 import asyncio
 import threading
 import time
-from typing import Any, AsyncGenerator, Dict, Optional
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from app.core.config import settings
 from app.core.logging import get_logger
@@ -15,8 +16,7 @@ logger = get_logger(__name__)
 # Try to import transformers, but make it optional
 try:
     import torch
-    from transformers import (AutoModelForSeq2SeqLM, AutoTokenizer,
-                              TextIteratorStreamer)
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, TextIteratorStreamer
     from transformers.tokenization_utils_base import BatchEncoding
 
     TRANSFORMERS_AVAILABLE = True
@@ -58,8 +58,8 @@ class HFStreamingSummarizer:
 
     def __init__(self):
         """Initialize the HuggingFace model and tokenizer."""
-        self.tokenizer: Optional[AutoTokenizer] = None
-        self.model: Optional[AutoModelForSeq2SeqLM] = None
+        self.tokenizer: AutoTokenizer | None = None
+        self.model: AutoModelForSeq2SeqLM | None = None
 
         if not TRANSFORMERS_AVAILABLE:
             logger.warning("⚠️ Transformers not available - V2 endpoints will not work")
@@ -171,7 +171,7 @@ class HFStreamingSummarizer:
         temperature: float = None,
         top_p: float = None,
         prompt: str = "Summarize the key points concisely:",
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Stream text summarization using HuggingFace's TextIteratorStreamer.
 
@@ -277,14 +277,14 @@ class HFStreamingSummarizer:
                 inputs = {"input_ids": inputs_raw}
 
             # Ensure attention_mask only if missing AND input_ids is a Tensor
-            if "attention_mask" not in inputs and "input_ids" in inputs:
-                # Check if torch is available and input is a tensor
-                if (
-                    TRANSFORMERS_AVAILABLE
-                    and "torch" in globals()
-                    and isinstance(inputs["input_ids"], torch.Tensor)
-                ):
-                    inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
+            if (
+                "attention_mask" not in inputs
+                and "input_ids" in inputs
+                and TRANSFORMERS_AVAILABLE
+                and "torch" in globals()
+                and isinstance(inputs["input_ids"], torch.Tensor)
+            ):
+                inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
 
             # --- HARDEN: force singleton batch across all tensor fields ---
             def _to_singleton_batch(d):
@@ -333,8 +333,10 @@ class HFStreamingSummarizer:
             # Move inputs to model device (required even with device_map="auto")
             # For encoder-decoder models, inputs need to be on the encoder device
             model_device = next(self.model.parameters()).device
-            inputs = {k: v.to(model_device) if isinstance(v, torch.Tensor) else v 
-                     for k, v in inputs.items()}
+            inputs = {
+                k: v.to(model_device) if isinstance(v, torch.Tensor) else v
+                for k, v in inputs.items()
+            }
 
             # Validate pad/eos ids
             pad_id = self.tokenizer.pad_token_id
@@ -452,7 +454,7 @@ class HFStreamingSummarizer:
         temperature: float,
         top_p: float,
         prompt: str,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Recursively summarize long text by chunking and summarizing each chunk,
         then summarizing the summaries if there are multiple chunks.
@@ -468,7 +470,7 @@ class HFStreamingSummarizer:
 
             # Summarize each chunk
             for i, chunk in enumerate(chunks):
-                logger.info(f"Summarizing chunk {i+1}/{len(chunks)}")
+                logger.info(f"Summarizing chunk {i + 1}/{len(chunks)}")
 
                 # Use smaller max_new_tokens for individual chunks
                 chunk_max_tokens = min(max_new_tokens, 80)
@@ -520,7 +522,7 @@ class HFStreamingSummarizer:
         temperature: float,
         top_p: float,
         prompt: str,
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Summarize a single chunk of text using the same logic as the main method
         but without the recursive check.
@@ -591,13 +593,14 @@ class HFStreamingSummarizer:
             else:
                 inputs = {"input_ids": inputs_raw}
 
-            if "attention_mask" not in inputs and "input_ids" in inputs:
-                if (
-                    TRANSFORMERS_AVAILABLE
-                    and "torch" in globals()
-                    and isinstance(inputs["input_ids"], torch.Tensor)
-                ):
-                    inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
+            if (
+                "attention_mask" not in inputs
+                and "input_ids" in inputs
+                and TRANSFORMERS_AVAILABLE
+                and "torch" in globals()
+                and isinstance(inputs["input_ids"], torch.Tensor)
+            ):
+                inputs["attention_mask"] = torch.ones_like(inputs["input_ids"])
 
             def _to_singleton_batch(d):
                 out = {}

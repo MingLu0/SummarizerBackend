@@ -4,7 +4,8 @@ Ollama service integration for text summarization.
 
 import json
 import time
-from typing import Any, AsyncGenerator, Dict
+from collections.abc import AsyncGenerator
+from typing import Any
 from urllib.parse import urljoin
 
 import httpx
@@ -50,7 +51,7 @@ class OllamaService:
         text: str,
         max_tokens: int = 100,
         prompt: str = "Summarize concisely:",
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Summarize text using Ollama.
         Raises httpx.HTTPError (and subclasses) on failure.
@@ -136,13 +137,13 @@ class OllamaService:
         text: str,
         max_tokens: int = 100,
         prompt: str = "Summarize concisely:",
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """
         Stream text summarization using Ollama.
         Yields chunks as they arrive from Ollama.
         Raises httpx.HTTPError (and subclasses) on failure.
         """
-        start_time = time.time()
+        time.time()
 
         # Optimized timeout: base + 3s per extra 1000 chars (cap 90s)
         text_length = len(text)
@@ -274,7 +275,7 @@ class OllamaService:
             async with httpx.AsyncClient(timeout=5.0) as client:
                 resp = await client.get(tags_url)
                 resp.raise_for_status()
-                tags = resp.json()
+                resp.json()
 
             # If you want to *require* the model to exist, uncomment below:
             # available = {m.get("name") for m in tags.get("models", []) if isinstance(m, dict)}

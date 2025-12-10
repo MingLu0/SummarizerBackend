@@ -110,7 +110,7 @@ class TestRequestContextMiddleware:
                 return response
 
             # Test the middleware
-            result = await request_context_middleware(request, mock_call_next)
+            await request_context_middleware(request, mock_call_next)
 
             # Verify logging was called
             mock_logger.log_request.assert_called_once_with(

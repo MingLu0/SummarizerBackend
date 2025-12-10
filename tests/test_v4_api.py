@@ -2,6 +2,7 @@
 Tests for V4 Structured Summarization API endpoints.
 """
 
+import contextlib
 import json
 from unittest.mock import patch
 
@@ -59,7 +60,6 @@ def test_v4_scrape_and_summarize_stream_success(client: TestClient):
             "app.services.structured_summarizer.structured_summarizer_service.summarize_structured_stream",
             side_effect=mock_stream,
         ):
-
             response = client.post(
                 "/api/v4/scrape-and-summarize/stream",
                 json={
@@ -79,10 +79,8 @@ def test_v4_scrape_and_summarize_stream_success(client: TestClient):
             events = []
             for line in response.text.split("\n"):
                 if line.startswith("data: "):
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         events.append(json.loads(line[6:]))
-                    except json.JSONDecodeError:
-                        pass
 
             assert len(events) > 0
 
@@ -107,6 +105,7 @@ def test_v4_scrape_and_summarize_stream_success(client: TestClient):
 
 def test_v4_text_mode_success(client: TestClient):
     """Test V4 with direct text input (no scraping)."""
+
     async def mock_stream(*args, **kwargs):
         yield {
             "content": '{"title": "Summary", "main_summary": "Test"}',
@@ -119,7 +118,6 @@ def test_v4_text_mode_success(client: TestClient):
         "app.services.structured_summarizer.structured_summarizer_service.summarize_structured_stream",
         side_effect=mock_stream,
     ):
-
         response = client.post(
             "/api/v4/scrape-and-summarize/stream",
             json={
@@ -135,10 +133,8 @@ def test_v4_text_mode_success(client: TestClient):
         events = []
         for line in response.text.split("\n"):
             if line.startswith("data: "):
-                try:
+                with contextlib.suppress(json.JSONDecodeError):
                     events.append(json.loads(line[6:]))
-                except json.JSONDecodeError:
-                    pass
 
         # Check metadata event for text mode
         metadata_events = [e for e in events if e.get("type") == "metadata"]
@@ -325,15 +321,19 @@ def test_v4_text_length_validation(client: TestClient):
 @pytest.mark.asyncio
 async def test_v4_sse_headers(client: TestClient):
     """Test V4 SSE response headers."""
+
     async def mock_stream(*args, **kwargs):
         yield {"content": "test", "done": False, "tokens_used": 1}
         yield {"content": "", "done": True, "latency_ms": 1000.0}
 
-    with patch(
-        "app.services.article_scraper.article_scraper_service.scrape_article"
-    ) as mock_scrape, patch(
-        "app.services.structured_summarizer.structured_summarizer_service.summarize_structured_stream",
-        side_effect=mock_stream,
+    with (
+        patch(
+            "app.services.article_scraper.article_scraper_service.scrape_article"
+        ) as mock_scrape,
+        patch(
+            "app.services.structured_summarizer.structured_summarizer_service.summarize_structured_stream",
+            side_effect=mock_stream,
+        ),
     ):
         mock_scrape.return_value = {
             "text": "Test article content. " * 20,
@@ -368,7 +368,8 @@ def test_v4_stream_json_url_mode_success(client: TestClient):
         mock_scrape.return_value = {
             "text": "Artificial intelligence is transforming modern technology. "
             "Machine learning algorithms are becoming more sophisticated. "
-            "Deep learning models can now process vast amounts of data efficiently." * 10,
+            "Deep learning models can now process vast amounts of data efficiently."
+            * 10,
             "title": "AI Revolution 2024",
             "author": "Dr. Jane Smith",
             "date": "2024-11-30",
@@ -382,20 +383,20 @@ def test_v4_stream_json_url_mode_success(client: TestClient):
         async def mock_json_stream(*args, **kwargs):
             # Yield raw JSON token fragments (simulating Outlines output)
             yield '{"title": "'
-            yield 'AI Revolution'
+            yield "AI Revolution"
             yield '", "main_summary": "'
-            yield 'Artificial intelligence is rapidly evolving'
+            yield "Artificial intelligence is rapidly evolving"
             yield '", "key_points": ['
             yield '"AI is transforming technology"'
             yield ', "ML algorithms are improving"'
             yield ', "Deep learning processes data efficiently"'
             yield '], "category": "'
-            yield 'Technology'
+            yield "Technology"
             yield '", "sentiment": "'
-            yield 'positive'
+            yield "positive"
             yield '", "read_time_min": '
-            yield '3'
-            yield '}'
+            yield "3"
+            yield "}"
 
         with patch(
             "app.services.structured_summarizer.structured_summarizer_service.summarize_structured_stream_json",
@@ -500,6 +501,7 @@ def test_v4_stream_json_text_mode_success(client: TestClient):
 
 def test_v4_stream_json_no_metadata(client: TestClient):
     """Test stream-json endpoint with include_metadata=false."""
+
     async def mock_json_stream(*args, **kwargs):
         yield '{"title": "Test", '
         yield '"main_summary": "Summary", '
@@ -515,7 +517,8 @@ def test_v4_stream_json_no_metadata(client: TestClient):
         response = client.post(
             "/api/v4/scrape-and-summarize/stream-json",
             json={
-                "text": "Test article content for summary generation with enough characters to pass validation." * 2,
+                "text": "Test article content for summary generation with enough characters to pass validation."
+                * 2,
                 "style": "eli5",
                 "include_metadata": False,
             },
@@ -534,7 +537,9 @@ def test_v4_stream_json_no_metadata(client: TestClient):
         if events and events[0]:
             try:
                 first_event = json.loads(events[0])
-                assert first_event.get("type") != "metadata", "Metadata should not be included"
+                assert first_event.get("type") != "metadata", (
+                    "Metadata should not be included"
+                )
             except json.JSONDecodeError:
                 # First event is not complete JSON, so it's raw tokens (good!)
                 pass
@@ -550,22 +555,27 @@ def test_v4_stream_json_different_styles(client: TestClient):
     styles_to_test = ["skimmer", "executive", "eli5"]
 
     for style in styles_to_test:
-        async def mock_json_stream(*args, **kwargs):
-            yield f'{{"title": "{style.upper()}", '
-            yield '"main_summary": "Test", '
-            yield '"key_points": ["A"], '
-            yield '"category": "Test", '
-            yield '"sentiment": "positive", '
-            yield '"read_time_min": 1}'
+        # Capture loop variable in closure
+        def make_mock_stream(style_name: str):
+            async def mock_json_stream(*args, **kwargs):
+                yield f'{{"title": "{style_name.upper()}", '
+                yield '"main_summary": "Test", '
+                yield '"key_points": ["A"], '
+                yield '"category": "Test", '
+                yield '"sentiment": "positive", '
+                yield '"read_time_min": 1}'
+
+            return mock_json_stream
 
         with patch(
             "app.services.structured_summarizer.structured_summarizer_service.summarize_structured_stream_json",
-            side_effect=mock_json_stream,
+            side_effect=make_mock_stream(style),
         ):
             response = client.post(
                 "/api/v4/scrape-and-summarize/stream-json",
                 json={
-                    "text": "Test content for different styles with sufficient character count to pass validation requirements." * 2,
+                    "text": "Test content for different styles with sufficient character count to pass validation requirements."
+                    * 2,
                     "style": style,
                     "include_metadata": False,
                 },
@@ -576,6 +586,7 @@ def test_v4_stream_json_different_styles(client: TestClient):
 
 def test_v4_stream_json_custom_max_tokens(client: TestClient):
     """Test stream-json endpoint with custom max_tokens parameter."""
+
     async def mock_json_stream(text, style, max_tokens=None):
         # Verify max_tokens is passed through
         assert max_tokens == 1536
@@ -593,7 +604,8 @@ def test_v4_stream_json_custom_max_tokens(client: TestClient):
         response = client.post(
             "/api/v4/scrape-and-summarize/stream-json",
             json={
-                "text": "Test content with custom max tokens that meets minimum character requirements." * 3,
+                "text": "Test content with custom max tokens that meets minimum character requirements."
+                * 3,
                 "style": "executive",
                 "max_tokens": 1536,
                 "include_metadata": False,
@@ -715,6 +727,7 @@ def test_v4_stream_json_validation_errors(client: TestClient):
 
 def test_v4_stream_json_response_headers(client: TestClient):
     """Test stream-json endpoint returns correct SSE headers."""
+
     async def mock_json_stream(*args, **kwargs):
         yield '{"title": "Test", "main_summary": "Test", "key_points": [], '
         yield '"category": "Test", "sentiment": "neutral", "read_time_min": 1}'

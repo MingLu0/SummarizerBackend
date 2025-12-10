@@ -2,10 +2,10 @@
 Tests for V3 API endpoints.
 """
 
+import contextlib
 import json
 from unittest.mock import patch
 
-import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -40,7 +40,6 @@ def test_scrape_and_summarize_stream_success(client: TestClient):
             "app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream",
             side_effect=mock_stream,
         ):
-
             response = client.post(
                 "/api/v3/scrape-and-summarize/stream",
                 json={
@@ -59,10 +58,8 @@ def test_scrape_and_summarize_stream_success(client: TestClient):
             events = []
             for line in response.text.split("\n"):
                 if line.startswith("data: "):
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         events.append(json.loads(line[6:]))
-                    except json.JSONDecodeError:
-                        pass
 
             assert len(events) > 0
 
@@ -81,7 +78,7 @@ def test_scrape_and_summarize_stream_success(client: TestClient):
             assert len(content_events) >= 3
 
             # Check done event
-            done_events = [e for e in events if e.get("done") == True]
+            done_events = [e for e in events if e.get("done")]
             assert len(done_events) == 1
 
 
@@ -176,7 +173,6 @@ def test_scrape_without_metadata(client: TestClient):
             "app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream",
             side_effect=mock_stream,
         ):
-
             response = client.post(
                 "/api/v3/scrape-and-summarize/stream",
                 json={"url": "https://example.com/test", "include_metadata": False},
@@ -188,10 +184,8 @@ def test_scrape_without_metadata(client: TestClient):
             events = []
             for line in response.text.split("\n"):
                 if line.startswith("data: "):
-                    try:
+                    with contextlib.suppress(json.JSONDecodeError):
                         events.append(json.loads(line[6:]))
-                    except json.JSONDecodeError:
-                        pass
 
             # Should not have metadata event
             metadata_events = [e for e in events if e.get("type") == "metadata"]
@@ -225,7 +219,6 @@ def test_scrape_with_cache(client: TestClient):
             "app.services.hf_streaming_summarizer.hf_streaming_service.summarize_text_stream",
             side_effect=mock_stream,
         ):
-
             # First request - should call scraper
             response1 = client.post(
                 "/api/v3/scrape-and-summarize/stream",

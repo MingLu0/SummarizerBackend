@@ -92,9 +92,7 @@ def test_summarize_endpoint_large_text_handling():
     with patch("httpx.AsyncClient") as mock_client:
         mock_client.return_value = StubAsyncClient(post_result=StubAsyncResponse())
 
-        resp = client.post(
-            "/api/v1/summarize/", json={"text": large_text, "max_tokens": 256}
-        )
+        client.post("/api/v1/summarize/", json={"text": large_text, "max_tokens": 256})
 
         # Verify the client was called with extended timeout
         mock_client.assert_called_once()

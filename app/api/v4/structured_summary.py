@@ -267,7 +267,9 @@ async def _stream_generator_ndjson(text: str, payload, metadata: dict, request_i
     summarization_start = time.time()
 
     try:
-        async for event in structured_summarizer_service.summarize_structured_stream_ndjson(
+        async for (
+            event
+        ) in structured_summarizer_service.summarize_structured_stream_ndjson(
             text=text,
             style=payload.style.value,
             max_tokens=payload.max_tokens,
@@ -374,7 +376,9 @@ async def scrape_and_summarize_stream_json(
 
         # Now stream the JSON tokens from the service
         try:
-            async for token in structured_summarizer_service.summarize_structured_stream_json(
+            async for (
+                token
+            ) in structured_summarizer_service.summarize_structured_stream_json(
                 text=text_to_summarize,
                 style=payload.style.value,
             ):

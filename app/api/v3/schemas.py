@@ -3,7 +3,6 @@ Request and response schemas for V3 API.
 """
 
 import re
-from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -11,36 +10,36 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class ScrapeAndSummarizeRequest(BaseModel):
     """Request schema supporting both URL scraping and direct text summarization."""
 
-    url: Optional[str] = Field(
+    url: str | None = Field(
         None,
         description="URL of article to scrape and summarize",
         example="https://example.com/article",
     )
-    text: Optional[str] = Field(
+    text: str | None = Field(
         None,
         description="Direct text to summarize (alternative to URL)",
         example="Your article text here...",
     )
-    max_tokens: Optional[int] = Field(
+    max_tokens: int | None = Field(
         default=256, ge=1, le=2048, description="Maximum tokens in summary"
     )
-    temperature: Optional[float] = Field(
+    temperature: float | None = Field(
         default=0.3,
         ge=0.0,
         le=2.0,
         description="Sampling temperature (lower = more focused)",
     )
-    top_p: Optional[float] = Field(
+    top_p: float | None = Field(
         default=0.9, ge=0.0, le=1.0, description="Nucleus sampling parameter"
     )
-    prompt: Optional[str] = Field(
+    prompt: str | None = Field(
         default="Summarize this article concisely:",
         description="Custom summarization prompt",
     )
-    include_metadata: Optional[bool] = Field(
+    include_metadata: bool | None = Field(
         default=True, description="Include article metadata in response"
     )
-    use_cache: Optional[bool] = Field(
+    use_cache: bool | None = Field(
         default=True, description="Use cached content if available (URL mode only)"
     )
 
@@ -55,7 +54,7 @@ class ScrapeAndSummarizeRequest(BaseModel):
 
     @field_validator("url")
     @classmethod
-    def validate_url(cls, v: Optional[str]) -> Optional[str]:
+    def validate_url(cls, v: str | None) -> str | None:
         """Validate URL format and security."""
         if v is None:
             return v
@@ -83,29 +82,28 @@ class ScrapeAndSummarizeRequest(BaseModel):
 
         parsed = urlparse(v)
         hostname = parsed.hostname
-        if hostname:
-            # Check for private IP ranges
-            if (
-                hostname.startswith("10.")
-                or hostname.startswith("192.168.")
-                or hostname.startswith("172.16.")
-                or hostname.startswith("172.17.")
-                or hostname.startswith("172.18.")
-                or hostname.startswith("172.19.")
-                or hostname.startswith("172.20.")
-                or hostname.startswith("172.21.")
-                or hostname.startswith("172.22.")
-                or hostname.startswith("172.23.")
-                or hostname.startswith("172.24.")
-                or hostname.startswith("172.25.")
-                or hostname.startswith("172.26.")
-                or hostname.startswith("172.27.")
-                or hostname.startswith("172.28.")
-                or hostname.startswith("172.29.")
-                or hostname.startswith("172.30.")
-                or hostname.startswith("172.31.")
-            ):
-                raise ValueError("Cannot scrape private IP addresses")
+        # Check for private IP ranges
+        if hostname and (
+            hostname.startswith("10.")
+            or hostname.startswith("192.168.")
+            or hostname.startswith("172.16.")
+            or hostname.startswith("172.17.")
+            or hostname.startswith("172.18.")
+            or hostname.startswith("172.19.")
+            or hostname.startswith("172.20.")
+            or hostname.startswith("172.21.")
+            or hostname.startswith("172.22.")
+            or hostname.startswith("172.23.")
+            or hostname.startswith("172.24.")
+            or hostname.startswith("172.25.")
+            or hostname.startswith("172.26.")
+            or hostname.startswith("172.27.")
+            or hostname.startswith("172.28.")
+            or hostname.startswith("172.29.")
+            or hostname.startswith("172.30.")
+            or hostname.startswith("172.31.")
+        ):
+            raise ValueError("Cannot scrape private IP addresses")
 
         # Block file:// and other dangerous schemes
         if not v.startswith(("http://", "https://")):
@@ -119,7 +117,7 @@ class ScrapeAndSummarizeRequest(BaseModel):
 
     @field_validator("text")
     @classmethod
-    def validate_text(cls, v: Optional[str]) -> Optional[str]:
+    def validate_text(cls, v: str | None) -> str | None:
         """Validate text content if provided."""
         if v is None:
             return v
@@ -141,10 +139,10 @@ class ScrapeAndSummarizeRequest(BaseModel):
 class ArticleMetadata(BaseModel):
     """Article metadata extracted during scraping."""
 
-    title: Optional[str] = Field(None, description="Article title")
-    author: Optional[str] = Field(None, description="Author name")
-    date_published: Optional[str] = Field(None, description="Publication date")
-    site_name: Optional[str] = Field(None, description="Website name")
+    title: str | None = Field(None, description="Article title")
+    author: str | None = Field(None, description="Author name")
+    date_published: str | None = Field(None, description="Publication date")
+    site_name: str | None = Field(None, description="Website name")
     url: str = Field(..., description="Original URL")
     extracted_text_length: int = Field(..., description="Length of extracted text")
     scrape_method: str = Field(..., description="Scraping method used")
@@ -156,4 +154,4 @@ class ErrorResponse(BaseModel):
 
     detail: str = Field(..., description="Error message")
     code: str = Field(..., description="Error code")
-    request_id: Optional[str] = Field(None, description="Request tracking ID")
+    request_id: str | None = Field(None, description="Request tracking ID")

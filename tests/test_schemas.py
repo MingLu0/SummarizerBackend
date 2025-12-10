@@ -5,8 +5,12 @@ Tests for Pydantic schemas.
 import pytest
 from pydantic import ValidationError
 
-from app.api.v1.schemas import (ErrorResponse, HealthResponse,
-                                SummarizeRequest, SummarizeResponse)
+from app.api.v1.schemas import (
+    ErrorResponse,
+    HealthResponse,
+    SummarizeRequest,
+    SummarizeResponse,
+)
 
 
 class TestSummarizeRequest:

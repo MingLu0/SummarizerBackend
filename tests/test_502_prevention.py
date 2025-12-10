@@ -44,7 +44,7 @@ class Test502BadGatewayPrevention:
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=StubAsyncResponse())
 
-            resp = client.post(
+            client.post(
                 "/api/v1/summarize/", json={"text": large_text, "max_tokens": 256}
             )
 
@@ -64,7 +64,7 @@ class Test502BadGatewayPrevention:
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=StubAsyncResponse())
 
-            resp = client.post(
+            client.post(
                 "/api/v1/summarize/", json={"text": very_large_text, "max_tokens": 256}
             )
 
@@ -83,7 +83,7 @@ class Test502BadGatewayPrevention:
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=StubAsyncResponse())
 
-            resp = client.post(
+            client.post(
                 "/api/v1/summarize/", json={"text": small_text, "max_tokens": 256}
             )
 
@@ -100,7 +100,7 @@ class Test502BadGatewayPrevention:
         with patch("httpx.AsyncClient") as mock_client:
             mock_client.return_value = StubAsyncClient(post_result=StubAsyncResponse())
 
-            resp = client.post(
+            client.post(
                 "/api/v1/summarize/", json={"text": medium_text, "max_tokens": 256}
             )
 
@@ -217,7 +217,7 @@ class Test502BadGatewayPrevention:
                     post_result=StubAsyncResponse()
                 )
 
-                resp = client.post(
+                client.post(
                     "/api/v1/summarize/", json={"text": test_text, "max_tokens": 256}
                 )
 
@@ -225,6 +225,6 @@ class Test502BadGatewayPrevention:
                 mock_client.assert_called_once()
                 call_args = mock_client.call_args
                 actual_timeout = call_args[1]["timeout"]
-                assert (
-                    actual_timeout == expected_timeout
-                ), f"Text length {text_length} should have timeout {expected_timeout}, got {actual_timeout}"
+                assert actual_timeout == expected_timeout, (
+                    f"Text length {text_length} should have timeout {expected_timeout}, got {actual_timeout}"
+                )

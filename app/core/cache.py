@@ -4,7 +4,7 @@ Simple in-memory cache with TTL for V3 web scraping API.
 
 import time
 from threading import Lock
-from typing import Any, Dict, Optional
+from typing import Any
 
 from app.core.logging import get_logger
 
@@ -22,7 +22,7 @@ class SimpleCache:
             ttl_seconds: Time-to-live for cache entries in seconds (default: 1 hour)
             max_size: Maximum number of entries to store (default: 1000)
         """
-        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._cache: dict[str, dict[str, Any]] = {}
         self._lock = Lock()
         self._ttl = ttl_seconds
         self._max_size = max_size
@@ -30,7 +30,7 @@ class SimpleCache:
         self._misses = 0
         logger.info(f"Cache initialized with TTL={ttl_seconds}s, max_size={max_size}")
 
-    def get(self, key: str) -> Optional[Dict[str, Any]]:
+    def get(self, key: str) -> dict[str, Any] | None:
         """
         Get cached content for key.
 
@@ -59,7 +59,7 @@ class SimpleCache:
             logger.debug(f"Cache hit for key: {key[:50]}...")
             return entry["data"]
 
-    def set(self, key: str, data: Dict[str, Any]) -> None:
+    def set(self, key: str, data: dict[str, Any]) -> None:
         """
         Cache content with TTL.
 
@@ -116,7 +116,7 @@ class SimpleCache:
             self._misses = 0
             logger.info(f"Cleared all {count} cache entries")
 
-    def stats(self) -> Dict[str, int]:
+    def stats(self) -> dict[str, int]:
         """
         Get cache statistics.
 

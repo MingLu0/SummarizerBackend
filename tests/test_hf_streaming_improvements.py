@@ -2,12 +2,14 @@
 Tests for HuggingFace streaming summarizer improvements.
 """
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.hf_streaming_summarizer import (HFStreamingSummarizer,
-                                                  _split_into_chunks)
+from app.services.hf_streaming_summarizer import (
+    HFStreamingSummarizer,
+    _split_into_chunks,
+)
 
 
 class TestSplitIntoChunks:
@@ -142,37 +144,37 @@ class TestHFStreamingSummarizerImprovements:
         mock_streamer = MagicMock()
         mock_streamer.__iter__ = MagicMock(return_value=iter(["test", "summary"]))
 
-        with patch(
-            "app.services.hf_streaming_summarizer.TextIteratorStreamer",
-            return_value=mock_streamer,
+        with (
+            patch(
+                "app.services.hf_streaming_summarizer.TextIteratorStreamer",
+                return_value=mock_streamer,
+            ),
+            patch("app.services.hf_streaming_summarizer.settings") as mock_settings,
         ):
-            with patch(
-                "app.services.hf_streaming_summarizer.settings"
-            ) as mock_settings:
-                mock_settings.hf_model_id = "test-model"
+            mock_settings.hf_model_id = "test-model"
 
-                results = []
-                async for chunk in mock_summarizer._single_chunk_summarize(
-                    "Test text",
-                    max_new_tokens=80,
-                    temperature=0.3,
-                    top_p=0.9,
-                    prompt="Test prompt",
-                ):
-                    results.append(chunk)
+            results = []
+            async for chunk in mock_summarizer._single_chunk_summarize(
+                "Test text",
+                max_new_tokens=80,
+                temperature=0.3,
+                top_p=0.9,
+                prompt="Test prompt",
+            ):
+                results.append(chunk)
 
-                # Should have content chunks + final done
-                assert len(results) >= 2
+            # Should have content chunks + final done
+            assert len(results) >= 2
 
-                # Check that generation was called with correct parameters
-                mock_summarizer.model.generate.assert_called_once()
-                call_kwargs = mock_summarizer.model.generate.call_args[1]
+            # Check that generation was called with correct parameters
+            mock_summarizer.model.generate.assert_called_once()
+            call_kwargs = mock_summarizer.model.generate.call_args[1]
 
-                assert call_kwargs["max_new_tokens"] == 80
-                assert call_kwargs["temperature"] == 0.3
-                assert call_kwargs["top_p"] == 0.9
-                assert call_kwargs["length_penalty"] == 1.0  # Should be neutral
-                assert call_kwargs["min_new_tokens"] <= 50  # Should be conservative
+            assert call_kwargs["max_new_tokens"] == 80
+            assert call_kwargs["temperature"] == 0.3
+            assert call_kwargs["top_p"] == 0.9
+            assert call_kwargs["length_penalty"] == 1.0  # Should be neutral
+            assert call_kwargs["min_new_tokens"] <= 50  # Should be conservative
 
     @pytest.mark.asyncio
     async def test_single_chunk_summarize_defaults(self, mock_summarizer):
@@ -186,32 +188,32 @@ class TestHFStreamingSummarizerImprovements:
         mock_streamer = MagicMock()
         mock_streamer.__iter__ = MagicMock(return_value=iter(["test", "summary"]))
 
-        with patch(
-            "app.services.hf_streaming_summarizer.TextIteratorStreamer",
-            return_value=mock_streamer,
+        with (
+            patch(
+                "app.services.hf_streaming_summarizer.TextIteratorStreamer",
+                return_value=mock_streamer,
+            ),
+            patch("app.services.hf_streaming_summarizer.settings") as mock_settings,
         ):
-            with patch(
-                "app.services.hf_streaming_summarizer.settings"
-            ) as mock_settings:
-                mock_settings.hf_model_id = "test-model"
+            mock_settings.hf_model_id = "test-model"
 
-                results = []
-                async for chunk in mock_summarizer._single_chunk_summarize(
-                    "Test text",
-                    max_new_tokens=None,
-                    temperature=None,
-                    top_p=None,
-                    prompt="Test prompt",
-                ):
-                    results.append(chunk)
+            results = []
+            async for chunk in mock_summarizer._single_chunk_summarize(
+                "Test text",
+                max_new_tokens=None,
+                temperature=None,
+                top_p=None,
+                prompt="Test prompt",
+            ):
+                results.append(chunk)
 
-                # Check that generation was called with correct defaults
-                mock_summarizer.model.generate.assert_called_once()
-                call_kwargs = mock_summarizer.model.generate.call_args[1]
+            # Check that generation was called with correct defaults
+            mock_summarizer.model.generate.assert_called_once()
+            call_kwargs = mock_summarizer.model.generate.call_args[1]
 
-                assert call_kwargs["max_new_tokens"] == 80  # Default
-                assert call_kwargs["temperature"] == 0.3  # Default
-                assert call_kwargs["top_p"] == 0.9  # Default
+            assert call_kwargs["max_new_tokens"] == 80  # Default
+            assert call_kwargs["temperature"] == 0.3  # Default
+            assert call_kwargs["top_p"] == 0.9  # Default
 
     @pytest.mark.asyncio
     async def test_recursive_summarization_error_handling(self, mock_summarizer):
@@ -310,26 +312,26 @@ class TestHFStreamingSummarizerIntegration:
         mock_streamer = MagicMock()
         mock_streamer.__iter__ = MagicMock(return_value=iter(["short", "summary"]))
 
-        with patch(
-            "app.services.hf_streaming_summarizer.TextIteratorStreamer",
-            return_value=mock_streamer,
+        with (
+            patch(
+                "app.services.hf_streaming_summarizer.TextIteratorStreamer",
+                return_value=mock_streamer,
+            ),
+            patch("app.services.hf_streaming_summarizer.settings") as mock_settings,
         ):
-            with patch(
-                "app.services.hf_streaming_summarizer.settings"
-            ) as mock_settings:
-                mock_settings.hf_model_id = "test-model"
-                mock_settings.hf_temperature = 0.3
-                mock_settings.hf_top_p = 0.9
+            mock_settings.hf_model_id = "test-model"
+            mock_settings.hf_temperature = 0.3
+            mock_settings.hf_top_p = 0.9
 
-                # Short text (<1500 chars)
-                short_text = "This is a short text."
+            # Short text (<1500 chars)
+            short_text = "This is a short text."
 
-                results = []
-                async for chunk in summarizer.summarize_text_stream(short_text):
-                    results.append(chunk)
+            results = []
+            async for chunk in summarizer.summarize_text_stream(short_text):
+                results.append(chunk)
 
-                # Should have used normal flow (not recursive)
-                assert len(results) >= 2
-                assert results[0]["content"] == "short"
-                assert results[1]["content"] == "summary"
-                assert results[-1]["done"] is True
+            # Should have used normal flow (not recursive)
+            assert len(results) >= 2
+            assert results[0]["content"] == "short"
+            assert results[1]["content"] == "summary"
+            assert results[-1]["done"] is True

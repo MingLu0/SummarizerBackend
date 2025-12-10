@@ -4,11 +4,8 @@ Tests for the startup script functionality.
 
 import os
 import shutil
-import subprocess
 import tempfile
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 
 class TestStartupScript:
@@ -49,7 +46,7 @@ class TestStartupScript:
 
         # We can't actually run the script in tests due to uvicorn, but we can test the logic
         # by checking if the .env creation logic is present in the script
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         assert "if [ ! -f .env ]" in script_content
@@ -60,7 +57,7 @@ class TestStartupScript:
         """Test that script includes Ollama service health check."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         assert "curl -s http://127.0.0.1:11434/api/tags" in script_content
@@ -70,7 +67,7 @@ class TestStartupScript:
         """Test that script checks for model availability."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         assert "Model" in script_content
@@ -80,7 +77,7 @@ class TestStartupScript:
         """Test that script includes process cleanup logic."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         # Check for multiple process killing methods
@@ -93,7 +90,7 @@ class TestStartupScript:
         """Test that script verifies port is free after cleanup."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         assert "Port" in script_content
@@ -104,7 +101,7 @@ class TestStartupScript:
         """Test that script starts uvicorn with correct parameters."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         assert "uvicorn app.main:app" in script_content
@@ -116,7 +113,7 @@ class TestStartupScript:
         """Test that script provides helpful user feedback."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         # Check for emoji and helpful messages
@@ -132,7 +129,7 @@ class TestStartupScript:
         """Test that script handles Ollama not running gracefully."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         assert "Ollama is not running" in script_content
@@ -143,7 +140,7 @@ class TestStartupScript:
         """Test that script handles model not available gracefully."""
         script_path = os.path.join(self.original_cwd, "start-server.sh")
 
-        with open(script_path, "r") as f:
+        with open(script_path) as f:
             script_content = f.read()
 
         assert "Model" in script_content

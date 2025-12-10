@@ -4,7 +4,7 @@ Custom middlewares for request ID and timing/logging.
 
 import time
 import uuid
-from typing import Callable
+from collections.abc import Callable
 
 from fastapi import Request, Response
 

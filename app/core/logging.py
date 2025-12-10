@@ -4,7 +4,7 @@ Logging configuration for the text summarizer backend.
 
 import logging
 import sys
-from typing import Any, Dict
+from typing import Any
 
 from app.core.config import settings
 

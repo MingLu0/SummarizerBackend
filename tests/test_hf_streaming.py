@@ -2,13 +2,14 @@
 Tests for HuggingFace streaming service.
 """
 
-import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.services.hf_streaming_summarizer import (HFStreamingSummarizer,
-                                                  hf_streaming_service)
+from app.services.hf_streaming_summarizer import (
+    HFStreamingSummarizer,
+    hf_streaming_service,
+)
 
 
 class TestHFStreamingSummarizer:
@@ -106,9 +107,9 @@ class TestHFStreamingSummarizer:
 
         # Test that the method exists and handles the case when torch is not available
         try:
-            dtype = service._get_torch_dtype()
+            service._get_torch_dtype()
             # If it doesn't raise an exception, that's good enough for this test
-            assert dtype is not None or True  # Always pass since torch not available
+            assert True  # Always pass since torch not available
         except NameError:
             # Expected when torch is not available
             pass
@@ -119,9 +120,9 @@ class TestHFStreamingSummarizer:
 
         # Test that the method exists and handles the case when torch is not available
         try:
-            dtype = service._get_torch_dtype()
+            service._get_torch_dtype()
             # If it doesn't raise an exception, that's good enough for this test
-            assert dtype is not None or True  # Always pass since torch not available
+            assert True  # Always pass since torch not available
         except NameError:
             # Expected when torch is not available
             pass

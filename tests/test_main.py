@@ -2,11 +2,6 @@
 Tests for main FastAPI application.
 """
 
-import pytest
-from fastapi.testclient import TestClient
-
-from app.main import app
-
 
 class TestMainApp:
     """Test main FastAPI application."""
