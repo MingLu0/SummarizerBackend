@@ -1,11 +1,16 @@
 """
 Tests for middleware functionality.
+
+Tests verify core middleware behavior (request ID handling, exception handling).
+Logging integration tests are in test_loguru_integration.py.
 """
 
-from unittest.mock import Mock, patch
+from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from fastapi import Request, Response
+from loguru import logger
 
 from app.core.middleware import request_context_middleware
 
@@ -80,10 +85,10 @@ class TestRequestContextMiddleware:
 
         # Mock the call_next function to raise an exception
         async def mock_call_next(req):
-            raise Exception("Test exception")
+            raise ValueError("Test exception")
 
         # Test that middleware doesn't suppress exceptions
-        with pytest.raises(Exception, match="Test exception"):
+        with pytest.raises(ValueError, match="Test exception"):
             await request_context_middleware(request, mock_call_next)
 
         # Verify request ID was still added
@@ -91,29 +96,65 @@ class TestRequestContextMiddleware:
         assert request.state.request_id is not None
 
     @pytest.mark.asyncio
-    async def test_middleware_logging_integration(self):
-        """Test that middleware integrates with logging."""
-        with patch("app.core.middleware.request_logger") as mock_logger:
-            # Mock request and response
-            request = Mock(spec=Request)
-            request.headers = {}
-            request.state = Mock()
-            request.method = "GET"
-            request.url.path = "/test"
+    async def test_middleware_sets_context_var(self, tmp_path: Path):
+        """Test that middleware sets request ID in context variable."""
+        from app.core.logging import request_id_var
 
-            response = Mock(spec=Response)
-            response.headers = {}
-            response.status_code = 200
+        log_file = tmp_path / "middleware_context.log"
+        logger.remove()
+        logger.add(log_file, format="{message}", level="INFO")
 
-            # Mock the call_next function
-            async def mock_call_next(req):
-                return response
+        # Mock request
+        request = Mock(spec=Request)
+        request.headers = {"X-Request-ID": "context-test-456"}
+        request.state = Mock()
+        request.method = "GET"
+        request.url.path = "/test"
 
-            # Test the middleware
-            await request_context_middleware(request, mock_call_next)
+        response = Mock(spec=Response)
+        response.headers = {}
+        response.status_code = 200
 
-            # Verify logging was called
-            mock_logger.log_request.assert_called_once_with(
-                "GET", "/test", request.state.request_id
-            )
-            mock_logger.log_response.assert_called_once()
+        # Mock the call_next function
+        async def mock_call_next(req):
+            # Log inside request handling (context var should be set)
+            current_request_id = request_id_var.get()
+            logger.info(f"Processing request {current_request_id}")
+            return response
+
+        # Test the middleware
+        await request_context_middleware(request, mock_call_next)
+
+        # Verify context var was set
+        content = log_file.read_text()
+        assert "context-test-456" in content
+
+    @pytest.mark.asyncio
+    async def test_middleware_logging_works(self, tmp_path: Path):
+        """Test that middleware logs requests and responses."""
+        log_file = tmp_path / "middleware_log.log"
+        logger.remove()
+        logger.add(log_file, format="{message}", level="INFO")
+
+        # Mock request and response
+        request = Mock(spec=Request)
+        request.headers = {}
+        request.state = Mock()
+        request.method = "POST"
+        request.url.path = "/api/data"
+
+        response = Mock(spec=Response)
+        response.headers = {}
+        response.status_code = 201
+
+        # Mock the call_next function
+        async def mock_call_next(req):
+            return response
+
+        # Test the middleware
+        await request_context_middleware(request, mock_call_next)
+
+        # Verify logs contain request and response
+        content = log_file.read_text()
+        assert "POST /api/data" in content
+        assert "201" in content

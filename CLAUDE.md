@@ -161,16 +161,28 @@ Settings are managed via `app/core/config.py` using Pydantic BaseSettings. Key e
 - `SCRAPING_RATE_LIMIT_PER_MINUTE` - Rate limit per IP (default: `10`)
 
 **Server Configuration**:
-- `SERVER_HOST`, `SERVER_PORT`, `LOG_LEVEL`
+- `SERVER_HOST`, `SERVER_PORT`, `LOG_LEVEL`, `LOG_FORMAT`
 
 ### Core Infrastructure
 
-**Logging** (`app/core/logging.py`)
-- Structured logging with request IDs
-- RequestLogger class for audit trails
+**Logging** (`app/core/logging.py`) - **Powered by Loguru**
+- **Structured Logging**: Automatic JSON serialization for production, colored text for development
+- **Environment-Aware**: Auto-detects HuggingFace Spaces (JSON logs) vs local development (colored logs)
+- **Request ID Context**: Automatic propagation via `contextvars` (no manual passing required)
+- **Backward Compatible**: `get_logger()` and `RequestLogger` class maintain existing API
+- **Configuration**:
+  - `LOG_LEVEL`: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO)
+  - `LOG_FORMAT`: `json`, `text`, or `auto` (default: auto-detect based on environment)
+- **Features**:
+  - Lazy evaluation for performance (`logger.opt(lazy=True)`)
+  - Exception tracing with full stack traces
+  - Automatic request ID binding without manual propagation
+  - Structured fields (request_id, status_code, duration_ms, etc.)
 
 **Middleware** (`app/core/middleware.py`)
 - Request context middleware for tracking
+- Automatic request ID generation/extraction from headers
+- Context variable injection for automatic logging propagation
 - CORS middleware for cross-origin requests
 
 **Error Handling** (`app/core/errors.py`)

@@ -8,7 +8,7 @@ from collections.abc import Callable
 
 from fastapi import Request, Response
 
-from app.core.logging import RequestLogger, get_logger
+from app.core.logging import RequestLogger, get_logger, request_id_var
 
 logger = get_logger(__name__)
 request_logger = RequestLogger(logger)
@@ -18,6 +18,9 @@ async def request_context_middleware(request: Request, call_next: Callable) -> R
     """Attach a request id and perform basic request/response logging."""
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
+
+    # Set request ID in context variable for automatic propagation
+    request_id_var.set(request_id)
 
     start = time.time()
     request_logger.log_request(request.method, request.url.path, request_id)

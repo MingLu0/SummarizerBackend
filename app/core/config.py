@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     server_host: str = Field(default="127.0.0.1", env="SERVER_HOST")
     server_port: int = Field(default=8000, env="SERVER_PORT", ge=1, le=65535)
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
+    log_format: str = Field(
+        default="auto",
+        env="LOG_FORMAT",
+        description="Log format: 'json' for structured logs, 'text' for colored output, 'auto' for environment-based selection",
+    )
 
     # Optional: API Security
     api_key_enabled: bool = Field(default=False, env="API_KEY_ENABLED")
@@ -142,6 +147,14 @@ class Settings(BaseSettings):
         if v.upper() not in valid_levels:
             return "INFO"  # Default to INFO for invalid levels
         return v.upper()
+
+    @validator("log_format")
+    def validate_log_format(cls, v):
+        """Validate log format is one of the supported formats."""
+        valid_formats = ["auto", "json", "text"]
+        if v.lower() not in valid_formats:
+            return "auto"  # Default to auto for invalid formats
+        return v.lower()
 
     class Config:
         env_file = ".env"
