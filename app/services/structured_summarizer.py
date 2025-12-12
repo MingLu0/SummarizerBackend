@@ -90,16 +90,21 @@ class StructuredSummarizer:
 
             # Decide device / quantization strategy
             use_cuda = torch.cuda.is_available()
+            use_mps = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
+            use_gpu = use_cuda or use_mps
             quantization_desc = "None"
 
             if use_cuda:
-                logger.info("CUDA is available. Using GPU for V4 model.")
+                logger.info("CUDA is available. Using NVIDIA GPU for V4 model.")
+            elif use_mps:
+                logger.info("MPS (Metal Performance Shaders) is available. Using Apple Silicon GPU for V4 model.")
             else:
-                logger.info("CUDA is NOT available. V4 model will run on CPU.")
+                logger.info("No GPU available. V4 model will run on CPU.")
 
             # ------------------------------------------------------------------
-            # Preferred path: 4-bit NF4 on GPU via bitsandbytes (memory efficient)
+            # Preferred path: 4-bit NF4 on CUDA GPU via bitsandbytes (memory efficient)
             # OR FP16 for speed (2-3x faster, uses more memory)
+            # Note: bitsandbytes only works on CUDA, not MPS
             # ------------------------------------------------------------------
             use_fp16_for_speed = getattr(settings, "v4_use_fp16_for_speed", False)
 
@@ -128,42 +133,69 @@ class StructuredSummarizer:
                 )
                 quantization_desc = "4-bit NF4 (bitsandbytes, GPU)"
 
-            elif use_cuda and use_fp16_for_speed:
-                # Use FP16 for 2-3x faster inference (uses ~2-3GB GPU memory)
+            elif use_gpu and use_fp16_for_speed:
+                # Use FP16 for 2-3x faster inference
+                # Note: MPS doesn't support BFloat16, so we avoid device_map="auto" for MPS
                 logger.info(
-                    "Loading V4 model in FP16 for maximum speed (2-3x faster than 4-bit)..."
+                    "Loading V4 model in FP16 for maximum speed (2-3x faster than FP32)..."
                 )
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    settings.v4_model_id,
-                    dtype=torch.float16,
-                    device_map="auto",
-                    cache_dir=settings.hf_cache_dir,
-                    trust_remote_code=True,
-                )
+
+                if use_mps:
+                    # MPS: Load without device_map, then manually move to MPS
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        settings.v4_model_id,
+                        torch_dtype=torch.float16,
+                        cache_dir=settings.hf_cache_dir,
+                        trust_remote_code=True,
+                    )
+                    self.model = self.model.to("mps")
+                else:
+                    # CUDA: Use device_map="auto" for multi-GPU support
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        settings.v4_model_id,
+                        torch_dtype=torch.float16,
+                        device_map="auto",
+                        cache_dir=settings.hf_cache_dir,
+                        trust_remote_code=True,
+                    )
                 quantization_desc = "FP16 (GPU, fast)"
 
             else:
                 # ------------------------------------------------------------------
                 # Fallback path:
-                #   - GPU without bitsandbytes  -> FP16
-                #   - CPU                        -> FP32 + optional dynamic INT8
+                #   - GPU (CUDA/MPS) without quantization/FP16  -> FP16
+                #   - CPU                                       -> FP32 + optional dynamic INT8
                 # ------------------------------------------------------------------
-                base_dtype = torch.float16 if use_cuda else torch.float32
-                logger.info(
-                    "Loading V4 model without 4-bit bitsandbytes. "
-                    f"Base dtype: {base_dtype}"
-                )
+                base_dtype = torch.float16 if use_gpu else torch.float32
 
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    settings.v4_model_id,
-                    dtype=base_dtype,
-                    device_map="auto" if use_cuda else None,
-                    cache_dir=settings.hf_cache_dir,
-                    trust_remote_code=True,
-                )
+                if use_mps:
+                    # MPS fallback: Load without device_map, manually move to MPS
+                    logger.info(
+                        f"Loading V4 model for MPS with dtype={base_dtype}"
+                    )
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        settings.v4_model_id,
+                        torch_dtype=base_dtype,
+                        cache_dir=settings.hf_cache_dir,
+                        trust_remote_code=True,
+                    )
+                    self.model = self.model.to("mps")
+                else:
+                    # CUDA or CPU
+                    device_strategy = "auto" if use_cuda else None
+                    logger.info(
+                        f"Loading V4 model with device_map='{device_strategy}', dtype={base_dtype}"
+                    )
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        settings.v4_model_id,
+                        torch_dtype=base_dtype,
+                        device_map=device_strategy,
+                        cache_dir=settings.hf_cache_dir,
+                        trust_remote_code=True,
+                    )
 
-                # Optional dynamic INT8 quantization on CPU
-                if getattr(settings, "v4_enable_quantization", True) and not use_cuda:
+                # Optional dynamic INT8 quantization on CPU only (not supported on GPU)
+                if getattr(settings, "v4_enable_quantization", True) and not use_gpu:
                     try:
                         logger.info(
                             "Applying dynamic INT8 quantization to V4 model on CPU..."
