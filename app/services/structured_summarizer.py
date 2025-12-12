@@ -90,14 +90,20 @@ class StructuredSummarizer:
 
             # Decide device / quantization strategy
             use_cuda = torch.cuda.is_available()
-            use_mps = torch.backends.mps.is_available() if hasattr(torch.backends, 'mps') else False
+            use_mps = (
+                torch.backends.mps.is_available()
+                if hasattr(torch.backends, "mps")
+                else False
+            )
             use_gpu = use_cuda or use_mps
             quantization_desc = "None"
 
             if use_cuda:
                 logger.info("CUDA is available. Using NVIDIA GPU for V4 model.")
             elif use_mps:
-                logger.info("MPS (Metal Performance Shaders) is available. Using Apple Silicon GPU for V4 model.")
+                logger.info(
+                    "MPS (Metal Performance Shaders) is available. Using Apple Silicon GPU for V4 model."
+                )
             else:
                 logger.info("No GPU available. V4 model will run on CPU.")
 
@@ -170,9 +176,7 @@ class StructuredSummarizer:
 
                 if use_mps:
                     # MPS fallback: Load without device_map, manually move to MPS
-                    logger.info(
-                        f"Loading V4 model for MPS with dtype={base_dtype}"
-                    )
+                    logger.info(f"Loading V4 model for MPS with dtype={base_dtype}")
                     self.model = AutoModelForCausalLM.from_pretrained(
                         settings.v4_model_id,
                         torch_dtype=base_dtype,

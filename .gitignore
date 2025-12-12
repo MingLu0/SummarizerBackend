@@ -59,3 +59,7 @@ Thumbs.db
 
 # Docker
 .dockerignore
+
+# Test output files
+*_test_output.txt
+*_scraping_test.txt

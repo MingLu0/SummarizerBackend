@@ -252,3 +252,6 @@ ENABLE_V4_WARMUP=true
 **Best Overall**: 3B + NDJSON (once streaming issues resolved)  
 **Most Reliable**: 3B + Outlines JSON (slower but works)
 
+
+
+
