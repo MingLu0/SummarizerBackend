@@ -130,13 +130,25 @@ class StructuredSummarizer:
                     bnb_4bit_use_double_quant=True,
                 )
 
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    settings.v4_model_id,
-                    device_map="auto",
-                    quantization_config=quant_config,
-                    cache_dir=settings.hf_cache_dir,
-                    trust_remote_code=True,
-                )
+                try:
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        settings.v4_model_id,
+                        device_map="auto",
+                        quantization_config=quant_config,
+                        attn_implementation="sdpa",
+                        cache_dir=settings.hf_cache_dir,
+                        trust_remote_code=True,
+                    )
+                    logger.info("✅ Using SDPA attention (optimized)")
+                except Exception:
+                    logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                    self.model = AutoModelForCausalLM.from_pretrained(
+                        settings.v4_model_id,
+                        device_map="auto",
+                        quantization_config=quant_config,
+                        cache_dir=settings.hf_cache_dir,
+                        trust_remote_code=True,
+                    )
                 quantization_desc = "4-bit NF4 (bitsandbytes, GPU)"
 
             elif use_gpu and use_fp16_for_speed:
@@ -148,22 +160,45 @@ class StructuredSummarizer:
 
                 if use_mps:
                     # MPS: Load without device_map, then manually move to MPS
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        settings.v4_model_id,
-                        torch_dtype=torch.float16,
-                        cache_dir=settings.hf_cache_dir,
-                        trust_remote_code=True,
-                    )
+                    try:
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=torch.float16,
+                            attn_implementation="sdpa",
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
+                        logger.info("✅ Using SDPA attention (optimized)")
+                    except Exception:
+                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=torch.float16,
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
                     self.model = self.model.to("mps")
                 else:
                     # CUDA: Use device_map="auto" for multi-GPU support
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        settings.v4_model_id,
-                        torch_dtype=torch.float16,
-                        device_map="auto",
-                        cache_dir=settings.hf_cache_dir,
-                        trust_remote_code=True,
-                    )
+                    try:
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=torch.float16,
+                            device_map="auto",
+                            attn_implementation="sdpa",
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
+                        logger.info("✅ Using SDPA attention (optimized)")
+                    except Exception:
+                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=torch.float16,
+                            device_map="auto",
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
                 quantization_desc = "FP16 (GPU, fast)"
 
             else:
@@ -177,12 +212,23 @@ class StructuredSummarizer:
                 if use_mps:
                     # MPS fallback: Load without device_map, manually move to MPS
                     logger.info(f"Loading V4 model for MPS with dtype={base_dtype}")
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        settings.v4_model_id,
-                        torch_dtype=base_dtype,
-                        cache_dir=settings.hf_cache_dir,
-                        trust_remote_code=True,
-                    )
+                    try:
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=base_dtype,
+                            attn_implementation="sdpa",
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
+                        logger.info("✅ Using SDPA attention (optimized)")
+                    except Exception:
+                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=base_dtype,
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
                     self.model = self.model.to("mps")
                 else:
                     # CUDA or CPU
@@ -190,13 +236,25 @@ class StructuredSummarizer:
                     logger.info(
                         f"Loading V4 model with device_map='{device_strategy}', dtype={base_dtype}"
                     )
-                    self.model = AutoModelForCausalLM.from_pretrained(
-                        settings.v4_model_id,
-                        torch_dtype=base_dtype,
-                        device_map=device_strategy,
-                        cache_dir=settings.hf_cache_dir,
-                        trust_remote_code=True,
-                    )
+                    try:
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=base_dtype,
+                            device_map=device_strategy,
+                            attn_implementation="sdpa",
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
+                        logger.info("✅ Using SDPA attention (optimized)")
+                    except Exception:
+                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        self.model = AutoModelForCausalLM.from_pretrained(
+                            settings.v4_model_id,
+                            torch_dtype=base_dtype,
+                            device_map=device_strategy,
+                            cache_dir=settings.hf_cache_dir,
+                            trust_remote_code=True,
+                        )
 
                 # Optional dynamic INT8 quantization on CPU only (not supported on GPU)
                 if getattr(settings, "v4_enable_quantization", True) and not use_gpu:

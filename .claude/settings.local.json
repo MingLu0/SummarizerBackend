@@ -24,7 +24,11 @@
       "Bash(timeout 15 conda run --no-capture-output -n summarizer python -m uvicorn:*)",
       "Bash(/opt/anaconda3/envs/summarizer/bin/python:*)",
       "Bash(ENABLE_V4_WARMUP=true timeout 15 /opt/anaconda3/envs/summarizer/bin/python:*)",
-      "Bash(ENABLE_V4_WARMUP=true /opt/anaconda3/envs/summarizer/bin/python:*)"
+      "Bash(ENABLE_V4_WARMUP=true /opt/anaconda3/envs/summarizer/bin/python:*)",
+      "Bash(=0.7.0)",
+      "Bash(time curl -X POST http://localhost:7860/api/v4/scrape-and-summarize/stream-ndjson -H \"Content-Type: application/json\" -d '{\"\"\"\"text\"\"\"\":\"\"\"\"Artificial intelligence is rapidly transforming the technology landscape. Companies are investing billions in AI research and development. Machine learning models are becoming more sophisticated and capable of handling complex tasks.\"\"\"\",\"\"\"\"style\"\"\"\":\"\"\"\"executive\"\"\"\",\"\"\"\"max_tokens\"\"\"\":256}' --max-time 90)",
+      "Bash(tee:*)",
+      "Bash(time curl:*)"
     ],
     "deny": [],
     "ask": []
