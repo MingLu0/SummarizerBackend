@@ -141,7 +141,9 @@ class StructuredSummarizer:
                     )
                     logger.info("✅ Using SDPA attention (optimized)")
                 except Exception:
-                    logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                    logger.warning(
+                        "⚠️ SDPA not supported, falling back to default attention"
+                    )
                     self.model = AutoModelForCausalLM.from_pretrained(
                         settings.v4_model_id,
                         device_map="auto",
@@ -170,7 +172,9 @@ class StructuredSummarizer:
                         )
                         logger.info("✅ Using SDPA attention (optimized)")
                     except Exception:
-                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        logger.warning(
+                            "⚠️ SDPA not supported, falling back to default attention"
+                        )
                         self.model = AutoModelForCausalLM.from_pretrained(
                             settings.v4_model_id,
                             torch_dtype=torch.float16,
@@ -191,7 +195,9 @@ class StructuredSummarizer:
                         )
                         logger.info("✅ Using SDPA attention (optimized)")
                     except Exception:
-                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        logger.warning(
+                            "⚠️ SDPA not supported, falling back to default attention"
+                        )
                         self.model = AutoModelForCausalLM.from_pretrained(
                             settings.v4_model_id,
                             torch_dtype=torch.float16,
@@ -222,7 +228,9 @@ class StructuredSummarizer:
                         )
                         logger.info("✅ Using SDPA attention (optimized)")
                     except Exception:
-                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        logger.warning(
+                            "⚠️ SDPA not supported, falling back to default attention"
+                        )
                         self.model = AutoModelForCausalLM.from_pretrained(
                             settings.v4_model_id,
                             torch_dtype=base_dtype,
@@ -247,7 +255,9 @@ class StructuredSummarizer:
                         )
                         logger.info("✅ Using SDPA attention (optimized)")
                     except Exception:
-                        logger.warning("⚠️ SDPA not supported, falling back to default attention")
+                        logger.warning(
+                            "⚠️ SDPA not supported, falling back to default attention"
+                        )
                         self.model = AutoModelForCausalLM.from_pretrained(
                             settings.v4_model_id,
                             torch_dtype=base_dtype,
